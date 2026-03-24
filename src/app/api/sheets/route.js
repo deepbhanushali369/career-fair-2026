@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
 import {
-  getAllInterviews,
-  getCandidateByEmail,
-  getCandidateJourney,
-  getHelperCandidates,
-  getSettings,
-  getOAByEmail,
-  getBehavioralByEmail,
-  getResumeByEmail,
-  getPPTByEmail,
+  getAllInterviews, getCandidateByEmail, getCandidateJourney,
+  getHelperCandidates, getSettings, getAllStationsAdmin,
+  getAllOA, getAllBehavioural, getAllResume, getAllPPT,
 } from "@/lib/sheets";
 
 export async function GET(request) {
@@ -18,7 +12,13 @@ export async function GET(request) {
 
   try {
     switch (action) {
-      // ── Candidate portal: get full journey ──
+      // ── Admin: ALL station data in one call ──
+      case "all-stations": {
+        const data = await getAllStationsAdmin();
+        return NextResponse.json(data);
+      }
+
+      // ── Candidate: full journey ──
       case "journey": {
         if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
         const journey = await getCandidateJourney(email);
@@ -28,30 +28,21 @@ export async function GET(request) {
         return NextResponse.json(journey);
       }
 
-      // ── Legacy: single interview lookup ──
+      // ── Legacy single lookups (kept for compatibility) ──
       case "candidate": {
         if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
         const candidate = await getCandidateByEmail(email);
         if (!candidate) return NextResponse.json({ error: "Not found" }, { status: 404 });
         return NextResponse.json(candidate);
       }
-
-      // ── Admin: all interviews ──
       case "all-interviews": {
-        const interviews = await getAllInterviews();
-        return NextResponse.json(interviews);
+        return NextResponse.json(await getAllInterviews());
       }
-
-      // ── Admin: helper candidates for dropdowns ──
       case "helpers": {
-        const helpers = await getHelperCandidates();
-        return NextResponse.json(helpers);
+        return NextResponse.json(await getHelperCandidates());
       }
-
-      // ── Admin: settings ──
       case "settings": {
-        const settings = await getSettings();
-        return NextResponse.json(settings);
+        return NextResponse.json(await getSettings());
       }
 
       default:
@@ -59,9 +50,6 @@ export async function GET(request) {
     }
   } catch (error) {
     console.error("Sheets API error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch data", details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch data", details: error.message }, { status: 500 });
   }
 }
