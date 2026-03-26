@@ -4,8 +4,8 @@ const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
 const SHEET_IDS = {
   responses: "1uWyaj_cvz_4DiFjeAYfvQ26wHoOkoNhu8Lr_kGDOd7Y",
-  domains: "1TzqruDCK5j_HmqBrnEZA9Uz-1NIsKHIBsFR2TK0sDzE",
   master: "1TMF2fD5VBbUMFbgRQjstrwa4nnedt-_lB9ZbCCrDQRc",
+  exhibitors: "1gfyqQtcas_JTf91Y6OxlXCkUgQi7uUXdnPui2a2eGXo",
 };
 
 function getAuth() {
@@ -46,224 +46,333 @@ export async function appendSheet(sheetId, range, values) {
 
 // ══════════════════════════════════════════════════════════════════════
 // ACTIVE_INTERVIEWS (Technical Interview)
-// Columns: A:Name | B:Email | C:Area of Interest | D:Interviewer
-//          E:Time Slot | F:Room | G:Scorecard | H:Feedback | I:Check-in
+// A:Name(formula) | B:Email(formula) | C:Area of Interest(formula)
+// D:Job Role(formula) | E:Interviewer Assigned | F:Room Number(VLOOKUP)
+// G:Interview Time Slot | H:Tech Score | I:Tech Feedback
+// J:PPT Score | K:PPT Feedback | L:Check-in
+// ⚠️ NEVER write to columns A, B, C, D, F — they are formulas
 // ══════════════════════════════════════════════════════════════════════
 
 export async function getAllInterviews() {
-  const rows = await readSheet(SHEET_IDS.master, "Active_Interviews!A:I");
+  const rows = await readSheet(SHEET_IDS.master, "Active_Interviews!A:L");
   if (!rows || rows.length < 2) return [];
-  return rows.slice(1).filter((r) => r[0]).map((row) => ({
-    name: row[0] || "", email: row[1] || "", areaOfInterest: row[2] || "",
-    interviewer: row[3] || "", timeSlot: row[4] || "", room: row[5] || "",
-    scorecard: row[6] || "", feedback: row[7] || "", checkin: row[8] || "No",
+  return rows.slice(1).filter((r) => r[0]).map((r, i) => ({
+    rowIndex: i,
+    name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+    jobRole: r[3] || "", interviewer: r[4] || "", room: r[5] || "",
+    timeSlot: r[6] || "", techScore: r[7] || "", techFeedback: r[8] || "",
+    pptScore: r[9] || "", pptFeedback: r[10] || "", checkin: r[11] || "No",
   }));
 }
 
 export async function getCandidateByEmail(email) {
-  const rows = await readSheet(SHEET_IDS.master, "Active_Interviews!A:I");
+  const rows = await readSheet(SHEET_IDS.master, "Active_Interviews!A:L");
   if (!rows || rows.length < 2) return null;
-  for (const row of rows.slice(1)) {
-    if (row[1] && row[1].toLowerCase().trim() === email.toLowerCase().trim()) {
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (r[1] && r[1].toLowerCase().trim() === email.toLowerCase().trim()) {
       return {
-        name: row[0] || "", email: row[1] || "", areaOfInterest: row[2] || "",
-        interviewer: row[3] || "", timeSlot: row[4] || "", room: row[5] || "",
-        scorecard: row[6] || "", feedback: row[7] || "", checkin: row[8] || "No",
+        rowIndex: i - 1,
+        sheetRow: i + 1, // actual sheet row number (1-indexed + header)
+        name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+        jobRole: r[3] || "", interviewer: r[4] || "", room: r[5] || "",
+        timeSlot: r[6] || "", techScore: r[7] || "", techFeedback: r[8] || "",
+        pptScore: r[9] || "", pptFeedback: r[10] || "", checkin: r[11] || "No",
       };
     }
   }
   return null;
 }
 
-export async function updateInterviewRow(rowIndex, data) {
-  const sheetRow = rowIndex + 2;
-  return writeSheet(SHEET_IDS.master, `Active_Interviews!A${sheetRow}:I${sheetRow}`, [[
-    data.name, data.email, data.areaOfInterest, data.interviewer,
-    data.timeSlot, data.room, data.scorecard, data.feedback, data.checkin || "No",
-  ]]);
+// Map field names to sheet columns (only writable ones)
+const INTERVIEW_FIELD_MAP = {
+  interviewer: "E", timeSlot: "G",
+  techScore: "H", techFeedback: "I",
+  pptScore: "J", pptFeedback: "K",
+  checkin: "L",
+};
+
+export async function updateInterviewRow(rowIndex, field, value) {
+  const col = INTERVIEW_FIELD_MAP[field];
+  if (!col) throw new Error(`Cannot write to field: ${field}`);
+  const sheetRow = rowIndex + 2; // +1 for header, +1 for 1-indexed
+  await writeSheet(SHEET_IDS.master, `Active_Interviews!${col}${sheetRow}`, [[value]]);
 }
 
 export async function addInterviewRow(data) {
-  return appendSheet(SHEET_IDS.master, "Active_Interviews!A:I", [[
-    data.name, data.email, data.areaOfInterest, data.interviewer,
-    data.timeSlot, data.room, data.scorecard || "", data.feedback || "", data.checkin || "No",
+  // Only append writable columns E, G, H, I, J, K, L
+  // Rows A-D are formulas pulling from Helper_Candidates, F is VLOOKUP
+  // We append a full row but leave formula columns blank — they auto-fill
+  await appendSheet(SHEET_IDS.master, "Active_Interviews!A:L", [[
+    "", "", "", "",                           // A-D: formulas (leave blank)
+    data.interviewer || "",                   // E: Interviewer
+    "",                                       // F: Room (VLOOKUP, leave blank)
+    data.timeSlot || "",                      // G: Time Slot
+    data.techScore || "",                     // H: Tech Score
+    data.techFeedback || "",                  // I: Tech Feedback
+    data.pptScore || "",                      // J: PPT Score
+    data.pptFeedback || "",                   // K: PPT Feedback
+    data.checkin || "No",                     // L: Check-in
   ]]);
 }
 
-export async function checkinInterview(email) {
-  const rows = await readSheet(SHEET_IDS.master, "Active_Interviews!B:B");
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i] && rows[i][0] && rows[i][0].toLowerCase().trim() === email.toLowerCase().trim()) {
-      await writeSheet(SHEET_IDS.master, `Active_Interviews!I${i + 1}`, [["Yes"]]);
-      return true;
-    }
-  }
-  return false;
-}
-
 export async function deleteInterviewRow(rowIndex) {
-  const sheets = google.sheets({ version: "v4", auth: getAuth() });
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SHEET_IDS.master });
-  const activeSheet = spreadsheet.data.sheets.find((s) => s.properties.title === "Active_Interviews");
-  if (!activeSheet) throw new Error("Active_Interviews tab not found");
+  const sheets = getSheets();
+  const sheetRow = rowIndex + 1; // 0-indexed for batchUpdate (skip header)
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_IDS.master });
+  const sheet = meta.data.sheets.find((s) => s.properties.title === "Active_Interviews");
+  if (!sheet) throw new Error("Active_Interviews tab not found");
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SHEET_IDS.master,
     requestBody: {
       requests: [{
         deleteDimension: {
-          range: { sheetId: activeSheet.properties.sheetId, dimension: "ROWS", startIndex: rowIndex + 1, endIndex: rowIndex + 2 },
+          range: {
+            sheetId: sheet.properties.sheetId,
+            dimension: "ROWS",
+            startIndex: sheetRow,
+            endIndex: sheetRow + 1,
+          },
         },
       }],
     },
   });
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// OA — Columns: A:Name | B:Email | C:Domain | D:OA Score
-// ══════════════════════════════════════════════════════════════════════
-
-export async function getAllOA() {
-  const rows = await readSheet(SHEET_IDS.master, "OA!A:D");
-  if (!rows || rows.length < 2) return [];
-  return rows.slice(1).filter((r) => r[0]).map((row) => ({
-    name: row[0] || "", email: row[1] || "", domain: row[2] || "", score: row[3] || "",
-  }));
+// Get candidates assigned to a specific interviewer
+export async function getInterviewerCandidates(interviewerName) {
+  const all = await getAllInterviews();
+  return all.filter((r) =>
+    r.interviewer.toLowerCase().trim() === interviewerName.toLowerCase().trim()
+  );
 }
 
-export async function getOAByEmail(email) {
-  const rows = await readSheet(SHEET_IDS.master, "OA!A:D");
+// ══════════════════════════════════════════════════════════════════════
+// FRONT_DESK
+// A:Name | B:Email | C:Area of Interest | D:Job Role
+// E:Checked In | F:Check In Time
+// ══════════════════════════════════════════════════════════════════════
+
+export async function getFrontDeskStatus(email) {
+  const rows = await readSheet(SHEET_IDS.master, "Front_Desk!A:F");
   if (!rows || rows.length < 2) return null;
-  for (const row of rows.slice(1)) {
-    if (row[1] && row[1].toLowerCase().trim() === email.toLowerCase().trim()) {
-      return { name: row[0] || "", email: row[1] || "", domain: row[2] || "", score: row[3] || "" };
+  for (const r of rows.slice(1)) {
+    if (r[1] && r[1].toLowerCase().trim() === email.toLowerCase().trim()) {
+      return {
+        name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+        jobRole: r[3] || "", checkedIn: (r[4] || "").toLowerCase() === "yes",
+        checkInTime: r[5] || "",
+      };
     }
   }
   return null;
 }
 
-export async function updateOARow(rowIndex, data) {
-  return writeSheet(SHEET_IDS.master, `OA!D${rowIndex + 2}`, [[data.score]]);
+export async function getAllFrontDesk() {
+  const rows = await readSheet(SHEET_IDS.master, "Front_Desk!A:F");
+  if (!rows || rows.length < 2) return [];
+  return rows.slice(1).filter((r) => r[0]).map((r, i) => ({
+    rowIndex: i, name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+    jobRole: r[3] || "", checkedIn: (r[4] || "").toLowerCase() === "yes",
+    checkInTime: r[5] || "",
+  }));
+}
+
+export async function checkInAtFrontDesk(name, email, domain, jobRole) {
+  // Check if already exists
+  const existing = await getFrontDeskStatus(email);
+  if (existing && existing.checkedIn) return true;
+
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+  if (existing) {
+    // Row exists but not checked in — find and update
+    const rows = await readSheet(SHEET_IDS.master, "Front_Desk!A:F");
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][1] && rows[i][1].toLowerCase().trim() === email.toLowerCase().trim()) {
+        const sheetRow = i + 1;
+        await writeSheet(SHEET_IDS.master, `Front_Desk!E${sheetRow}:F${sheetRow}`, [["Yes", timeStr]]);
+        return true;
+      }
+    }
+  }
+
+  // New row
+  await appendSheet(SHEET_IDS.master, "Front_Desk!A:F", [
+    [name, email, domain, jobRole, "Yes", timeStr],
+  ]);
+  return true;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// OA Tab
+// A:Name | B:Email | C:Domain | D:OA Score | E:Check-in
+// ══════════════════════════════════════════════════════════════════════
+
+export async function getAllOA() {
+  const rows = await readSheet(SHEET_IDS.master, "OA!A:E");
+  if (!rows || rows.length < 2) return [];
+  return rows.slice(1).filter((r) => r[0]).map((r, i) => ({
+    rowIndex: i, name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+    score: r[3] || "", checkin: r[4] || "No",
+  }));
+}
+
+export async function getOAByEmail(email) {
+  const rows = await readSheet(SHEET_IDS.master, "OA!A:E");
+  if (!rows || rows.length < 2) return null;
+  for (const r of rows.slice(1)) {
+    if (r[1] && r[1].toLowerCase().trim() === email.toLowerCase().trim()) {
+      return { name: r[0] || "", email: r[1] || "", domain: r[2] || "", score: r[3] || "", checkin: r[4] || "No" };
+    }
+  }
+  return null;
 }
 
 export async function checkinOA(name, email, domain) {
   const existing = await getOAByEmail(email);
   if (existing) return true;
-  await appendSheet(SHEET_IDS.master, "OA!A:D", [[name, email, domain, ""]]);
+  await appendSheet(SHEET_IDS.master, "OA!A:E", [[name, email, domain, "", "Yes"]]);
   return true;
 }
 
+export async function updateOARow(rowIndex, field, value) {
+  const colMap = { score: "D", checkin: "E" };
+  const col = colMap[field];
+  if (!col) throw new Error(`Invalid OA field: ${field}`);
+  await writeSheet(SHEET_IDS.master, `OA!${col}${rowIndex + 2}`, [[value]]);
+}
+
 // ══════════════════════════════════════════════════════════════════════
-// BEHAVIOURAL_INTERVIEW — Columns: A:Name | B:Email | C:Domain | D:Room | E:Score | F:Feedback
+// Behavioural_Interview Tab
+// A:Name | B:Email | C:Domain | D:Room | E:Score | F:Feedback | G:Check-in
 // ══════════════════════════════════════════════════════════════════════
 
 export async function getAllBehavioural() {
-  const rows = await readSheet(SHEET_IDS.master, "Behavioural_Interview!A:F");
+  const rows = await readSheet(SHEET_IDS.master, "Behavioural_Interview!A:G");
   if (!rows || rows.length < 2) return [];
-  return rows.slice(1).filter((r) => r[0]).map((row) => ({
-    name: row[0] || "", email: row[1] || "", domain: row[2] || "",
-    room: row[3] || "", score: row[4] || "", feedback: row[5] || "",
+  return rows.slice(1).filter((r) => r[0]).map((r, i) => ({
+    rowIndex: i, name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+    room: r[3] || "", score: r[4] || "", feedback: r[5] || "", checkin: r[6] || "No",
   }));
 }
 
-export async function getBehavioralByEmail(email) {
-  const rows = await readSheet(SHEET_IDS.master, "Behavioural_Interview!A:F");
+export async function getBehaviouralByEmail(email) {
+  const rows = await readSheet(SHEET_IDS.master, "Behavioural_Interview!A:G");
   if (!rows || rows.length < 2) return null;
-  for (const row of rows.slice(1)) {
-    if (row[1] && row[1].toLowerCase().trim() === email.toLowerCase().trim()) {
-      return { name: row[0] || "", email: row[1] || "", domain: row[2] || "", room: row[3] || "", score: row[4] || "", feedback: row[5] || "" };
+  for (const r of rows.slice(1)) {
+    if (r[1] && r[1].toLowerCase().trim() === email.toLowerCase().trim()) {
+      return {
+        name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+        room: r[3] || "", score: r[4] || "", feedback: r[5] || "", checkin: r[6] || "No",
+      };
     }
   }
   return null;
 }
 
-export async function updateBehaviouralRow(rowIndex, data) {
-  return writeSheet(SHEET_IDS.master, `Behavioural_Interview!D${rowIndex + 2}:F${rowIndex + 2}`, [[data.room, data.score, data.feedback]]);
-}
-
-export async function checkinBehavioral(name, email, domain) {
-  const existing = await getBehavioralByEmail(email);
+export async function checkinBehavioural(name, email, domain) {
+  const existing = await getBehaviouralByEmail(email);
   if (existing) return true;
-  await appendSheet(SHEET_IDS.master, "Behavioural_Interview!A:F", [[name, email, domain, "", "", ""]]);
+  await appendSheet(SHEET_IDS.master, "Behavioural_Interview!A:G", [[name, email, domain, "", "", "", "Yes"]]);
   return true;
 }
 
+export async function updateBehaviouralRow(rowIndex, field, value) {
+  const colMap = { room: "D", score: "E", feedback: "F", checkin: "G" };
+  const col = colMap[field];
+  if (!col) throw new Error(`Invalid Behavioural field: ${field}`);
+  await writeSheet(SHEET_IDS.master, `Behavioural_Interview!${col}${rowIndex + 2}`, [[value]]);
+}
+
 // ══════════════════════════════════════════════════════════════════════
-// RESUME_REVIEW — Columns: A:Name | B:Email | C:Domain | D:Score | E:Notes
+// Resume_Review Tab
+// A:Name | B:Email | C:Domain | D:Score | E:Notes | F:Check-in
 // ══════════════════════════════════════════════════════════════════════
 
 export async function getAllResume() {
-  const rows = await readSheet(SHEET_IDS.master, "Resume_Review!A:E");
+  const rows = await readSheet(SHEET_IDS.master, "Resume_Review!A:F");
   if (!rows || rows.length < 2) return [];
-  return rows.slice(1).filter((r) => r[0]).map((row) => ({
-    name: row[0] || "", email: row[1] || "", domain: row[2] || "", score: row[3] || "", notes: row[4] || "",
+  return rows.slice(1).filter((r) => r[0]).map((r, i) => ({
+    rowIndex: i, name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+    score: r[3] || "", notes: r[4] || "", checkin: r[5] || "No",
   }));
 }
 
 export async function getResumeByEmail(email) {
-  const rows = await readSheet(SHEET_IDS.master, "Resume_Review!A:E");
+  const rows = await readSheet(SHEET_IDS.master, "Resume_Review!A:F");
   if (!rows || rows.length < 2) return null;
-  for (const row of rows.slice(1)) {
-    if (row[1] && row[1].toLowerCase().trim() === email.toLowerCase().trim()) {
-      return { name: row[0] || "", email: row[1] || "", domain: row[2] || "", score: row[3] || "", notes: row[4] || "" };
+  for (const r of rows.slice(1)) {
+    if (r[1] && r[1].toLowerCase().trim() === email.toLowerCase().trim()) {
+      return { name: r[0] || "", email: r[1] || "", domain: r[2] || "", score: r[3] || "", notes: r[4] || "", checkin: r[5] || "No" };
     }
   }
   return null;
-}
-
-export async function updateResumeRow(rowIndex, data) {
-  return writeSheet(SHEET_IDS.master, `Resume_Review!D${rowIndex + 2}:E${rowIndex + 2}`, [[data.score, data.notes]]);
 }
 
 export async function checkinResume(name, email, domain) {
   const existing = await getResumeByEmail(email);
   if (existing) return true;
-  await appendSheet(SHEET_IDS.master, "Resume_Review!A:E", [[name, email, domain, "", ""]]);
+  await appendSheet(SHEET_IDS.master, "Resume_Review!A:F", [[name, email, domain, "", "", "Yes"]]);
   return true;
 }
 
+export async function updateResumeRow(rowIndex, field, value) {
+  const colMap = { score: "D", notes: "E", checkin: "F" };
+  const col = colMap[field];
+  if (!col) throw new Error(`Invalid Resume field: ${field}`);
+  await writeSheet(SHEET_IDS.master, `Resume_Review!${col}${rowIndex + 2}`, [[value]]);
+}
+
 // ══════════════════════════════════════════════════════════════════════
-// PPT_PRESENTATION — Columns: A:Name | B:Email | C:Domain | D:Score | E:Feedback
+// PPT_Presentation Tab
+// A:Name | B:Email | C:Domain | D:Score | E:Feedback | F:Check-in
 // ══════════════════════════════════════════════════════════════════════
 
 export async function getAllPPT() {
-  const rows = await readSheet(SHEET_IDS.master, "PPT_Presentation!A:E");
+  const rows = await readSheet(SHEET_IDS.master, "PPT_Presentation!A:F");
   if (!rows || rows.length < 2) return [];
-  return rows.slice(1).filter((r) => r[0]).map((row) => ({
-    name: row[0] || "", email: row[1] || "", domain: row[2] || "", score: row[3] || "", feedback: row[4] || "",
+  return rows.slice(1).filter((r) => r[0]).map((r, i) => ({
+    rowIndex: i, name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+    score: r[3] || "", feedback: r[4] || "", checkin: r[5] || "No",
   }));
 }
 
 export async function getPPTByEmail(email) {
-  const rows = await readSheet(SHEET_IDS.master, "PPT_Presentation!A:E");
+  const rows = await readSheet(SHEET_IDS.master, "PPT_Presentation!A:F");
   if (!rows || rows.length < 2) return null;
-  for (const row of rows.slice(1)) {
-    if (row[1] && row[1].toLowerCase().trim() === email.toLowerCase().trim()) {
-      return { name: row[0] || "", email: row[1] || "", domain: row[2] || "", score: row[3] || "", feedback: row[4] || "" };
+  for (const r of rows.slice(1)) {
+    if (r[1] && r[1].toLowerCase().trim() === email.toLowerCase().trim()) {
+      return { name: r[0] || "", email: r[1] || "", domain: r[2] || "", score: r[3] || "", feedback: r[4] || "", checkin: r[5] || "No" };
     }
   }
   return null;
 }
 
-export async function updatePPTRow(rowIndex, data) {
-  return writeSheet(SHEET_IDS.master, `PPT_Presentation!D${rowIndex + 2}:E${rowIndex + 2}`, [[data.score, data.feedback]]);
-}
-
 export async function checkinPPT(name, email, domain) {
   const existing = await getPPTByEmail(email);
   if (existing) return true;
-  await appendSheet(SHEET_IDS.master, "PPT_Presentation!A:E", [[name, email, domain, "", ""]]);
+  await appendSheet(SHEET_IDS.master, "PPT_Presentation!A:F", [[name, email, domain, "", "", "Yes"]]);
   return true;
 }
 
+export async function updatePPTRow(rowIndex, field, value) {
+  const colMap = { score: "D", feedback: "E", checkin: "F" };
+  const col = colMap[field];
+  if (!col) throw new Error(`Invalid PPT field: ${field}`);
+  await writeSheet(SHEET_IDS.master, `PPT_Presentation!${col}${rowIndex + 2}`, [[value]]);
+}
+
 // ══════════════════════════════════════════════════════════════════════
-// HELPERS & SETTINGS
+// Helper_Candidates & Settings
 // ══════════════════════════════════════════════════════════════════════
 
 export async function getHelperCandidates() {
-  const rows = await readSheet(SHEET_IDS.master, "Helper_Candidates!A:C");
+  const rows = await readSheet(SHEET_IDS.master, "Helper_Candidates!A:D");
   if (!rows || rows.length < 2) return [];
-  return rows.slice(1).filter((row) => row[0]).map((row) => ({
-    name: row[0] || "", email: row[1] || "", areaOfInterest: row[2] || "",
+  return rows.slice(1).filter((r) => r[0]).map((r) => ({
+    name: r[0] || "", email: r[1] || "", areaOfInterest: r[2] || "", jobRole: r[3] || "",
   }));
 }
 
@@ -272,55 +381,84 @@ export async function getSettings() {
   if (!rows) return { interviewers: [], rooms: [] };
   const interviewers = [], rooms = [];
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i] && rows[i][0]) interviewers.push(rows[i][0]);
-    if (rows[i] && rows[i][1]) rooms.push(rows[i][1]);
+    if (rows[i][0]) interviewers.push(rows[i][0]);
+    if (rows[i][1]) rooms.push(rows[i][1]);
   }
   return { interviewers, rooms };
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// BATCH: Admin gets everything in one API call from the app
+// EXHIBITORS (separate spreadsheet)
+// A:First Name | B:Last Name | C:Company Name | D:Position
+// E:Email Address | F:LinkedIn Profile
 // ══════════════════════════════════════════════════════════════════════
 
-export async function getAllStationsAdmin() {
-  const [interviews, oa, behavioural, resume, ppt, helpers, settings] = await Promise.all([
-    getAllInterviews(), getAllOA(), getAllBehavioural(), getAllResume(), getAllPPT(),
-    getHelperCandidates(), getSettings(),
-  ]);
-  return { interviews, oa, behavioural, resume, ppt, helpers, settings };
+export async function getExhibitors() {
+  const rows = await readSheet(SHEET_IDS.exhibitors, "Sheet1!A:G");
+  if (!rows || rows.length < 2) return [];
+  return rows.slice(1).filter((r) => r[0]).map((r) => ({
+    firstName: r[0] || "", lastName: r[1] || "",
+    company: r[2] || "", position: r[3] || "",
+    email: r[4] || "", linkedin: r[5] || "",
+    headshot: r[6] || "",
+  }));
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// CANDIDATE PORTAL: Full journey for one candidate
+// CANDIDATE JOURNEY (aggregates all data for one candidate)
 // ══════════════════════════════════════════════════════════════════════
 
 export async function getCandidateJourney(email) {
-  const [interview, oa, behavioral, resume, ppt] = await Promise.all([
-    getCandidateByEmail(email), getOAByEmail(email), getBehavioralByEmail(email),
-    getResumeByEmail(email), getPPTByEmail(email),
+  const [interview, oa, behavioural, resume, ppt, frontDesk] = await Promise.all([
+    getCandidateByEmail(email),
+    getOAByEmail(email),
+    getBehaviouralByEmail(email),
+    getResumeByEmail(email),
+    getPPTByEmail(email),
+    getFrontDeskStatus(email),
   ]);
 
+  if (!interview && !frontDesk) return null; // candidate not found at all
+
+  // Interview status uses check-in column
+  let interviewStatus = "Pending";
+  if (interview) {
+    if (interview.checkin === "Yes") {
+      interviewStatus = (interview.techScore && interview.techScore !== "") ? "Completed" : "In Progress";
+    }
+    // If checkin is "No" but row exists, still Pending (assigned but not arrived)
+  }
+
+  // Other stations: row exists = checked in
   function stationStatus(data, scoreField = "score") {
     if (!data) return "Pending";
     if (data[scoreField] && data[scoreField] !== "") return "Completed";
     return "In Progress";
   }
 
-  let interviewStatus = "Pending";
-  if (interview) {
-    interviewStatus = interview.checkin === "Yes" ? (interview.scorecard ? "Completed" : "In Progress") : "Pending";
-  }
+  const statuses = {
+    oa: stationStatus(oa),
+    interview: interviewStatus,
+    behavioral: stationStatus(behavioural),
+    resume: stationStatus(resume),
+    ppt: stationStatus(ppt),
+  };
 
-  const statuses = { oa: stationStatus(oa), interview: interviewStatus, behavioral: stationStatus(behavioral), resume: stationStatus(resume), ppt: stationStatus(ppt) };
-  const completed = Object.values(statuses).filter((s) => s === "Completed").length;
+  const completedCount = Object.values(statuses).filter((s) => s === "Completed").length;
 
   return {
-    name: interview?.name || oa?.name || behavioral?.name || resume?.name || ppt?.name || "",
-    email,
-    domain: interview?.areaOfInterest || oa?.domain || behavioral?.domain || resume?.domain || ppt?.domain || "",
-    progress: `${completed}/5`, completedCount: completed, statuses,
-    interview: interview || null, oa: oa || null, behavioral: behavioral || null, resume: resume || null, ppt: ppt || null,
+    name: interview?.name || frontDesk?.name || "",
+    email: interview?.email || frontDesk?.email || email,
+    domain: interview?.domain || frontDesk?.domain || "",
+    jobRole: interview?.jobRole || frontDesk?.jobRole || "",
+    frontDeskCheckedIn: frontDesk ? frontDesk.checkedIn : false,
+    progress: `${completedCount}/5`,
+    completedCount,
+    statuses,
+    interview: interview || null,
+    oa: oa || null,
+    behavioral: behavioural || null,
+    resume: resume || null,
+    ppt: ppt || null,
   };
 }
-
-export { SHEET_IDS };
