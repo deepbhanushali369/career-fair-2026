@@ -3,532 +3,687 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 // ── Constants ────────────────────────────────────────────────────────
-const TIME_SLOTS = [
-  "9:00 AM","9:30 AM","10:00 AM","10:30 AM","11:00 AM","11:30 AM",
-  "12:00 PM","12:30 PM","1:00 PM","1:30 PM","2:00 PM","2:30 PM",
-  "3:00 PM","3:30 PM","4:00 PM","4:30 PM","5:00 PM",
-];
-const SCORES = ["1","2","3","4","5"];
-const SCORE_LABELS = { "5":"Excellent","4":"Great","3":"Good","2":"Fair","1":"Needs Improvement" };
-const SCORE_COLORS = { "5":"#22C55E","4":"#3B82F6","3":"#EAB308","2":"#F97316","1":"#EF4444" };
+const DOMAINS = ["All", "Data", "Computer Science", "AI / Machine Learning", "Cybersecurity", "Product / Project Management", "Bio / Pharma / Life Sciences", "Electrical / Hardware Engineering", "Finance", "Supply Chain", "Other"];
+const TIME_SLOTS = ["11:00 AM", "11:30 AM", "12:00 PM", "12:30 PM", "1:00 PM", "1:30 PM", "2:00 PM", "2:30 PM", "3:00 PM", "3:30 PM", "4:00 PM", "4:30 PM", "5:00 PM", "5:30 PM", "6:00 PM"];
 
 const TABS = [
-  { key:"overview", label:"Overview", icon:"📊", color:"#8B5CF6" },
-  { key:"interview", label:"Tech Interview", icon:"💻", color:"#3B82F6" },
-  { key:"oa", label:"OA", icon:"📝", color:"#F59E0B" },
-  { key:"behavioural", label:"Behavioural", icon:"🗣️", color:"#EC4899" },
-  { key:"resume", label:"Resume", icon:"📄", color:"#14B8A6" },
-  { key:"ppt", label:"PPT", icon:"📊", color:"#F97316" },
+  { key: "overview", label: "Overview", icon: "📊" },
+  { key: "frontdesk", label: "Front Desk", icon: "🚪" },
+  { key: "ia", label: "IA Results", icon: "📝" },
+  { key: "assign", label: "Assign", icon: "📋" },
+  { key: "behavioural", label: "Behavioural", icon: "🗣️" },
+  { key: "resume", label: "Resume", icon: "📄" },
+  { key: "panel", label: "Panel", icon: "💼" },
 ];
 
-// ── Shared Styles ────────────────────────────────────────────────────
-const cellSel = {
-  padding:"6px 8px", borderRadius:"6px", border:"1px solid rgba(255,255,255,0.08)",
-  background:"rgba(0,0,0,0.2)", color:"#F8FAFC", fontSize:"12px", outline:"none", minWidth:"80px",
-};
-const cellInp = { ...cellSel, width:"140px" };
-const formSel = {
-  width:"100%", padding:"10px 12px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.1)",
-  background:"rgba(0,0,0,0.3)", color:"#F8FAFC", fontSize:"14px", outline:"none",
+const glass = {
+  background: "rgba(255,255,255,0.04)",
+  backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: "16px",
 };
 
-// ── Searchable Dropdown ──────────────────────────────────────────────
-function SearchableDropdown({ options, value, onChange, placeholder }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const ref = useRef(null);
-  useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-  const filtered = options.filter((o) => o.toLowerCase().includes(search.toLowerCase()));
+const inputStyle = {
+  padding: "10px 12px", borderRadius: "10px", fontSize: "13px",
+  border: "1px solid rgba(255,255,255,0.08)", background: "rgba(0,0,0,0.3)",
+  color: "#F8FAFC", outline: "none", fontFamily: "'DM Sans', sans-serif",
+};
+
+// ── Wrapper ──────────────────────────────────────────────────────────
+function Wrapper({ children }) {
   return (
-    <div ref={ref} style={{ position:"relative" }}>
-      <input type="text" value={open ? search : value} placeholder={placeholder || "Search..."}
-        onFocus={() => { setOpen(true); setSearch(""); }} onChange={(e) => setSearch(e.target.value)} style={formSel} />
-      {open && (
-        <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:50, marginTop:"4px",
-          background:"#1E293B", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"8px", maxHeight:"200px", overflowY:"auto" }}>
-          {filtered.length === 0 && <div style={{ padding:"10px 12px", color:"#64748B", fontSize:"13px" }}>No matches</div>}
-          {filtered.map((o) => (
-            <div key={o} onClick={() => { onChange(o); setOpen(false); setSearch(""); }}
-              style={{ padding:"10px 12px", cursor:"pointer", fontSize:"13px", color:"#F8FAFC", borderBottom:"1px solid rgba(255,255,255,0.04)" }}
-              onMouseEnter={(e) => e.target.style.background = "rgba(59,130,246,0.15)"}
-              onMouseLeave={(e) => e.target.style.background = "transparent"}>{o}</div>
-          ))}
-        </div>
-      )}
-    </div>
+    <>
+      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+      <div style={{ minHeight: "100vh", background: "#060B18", color: "#F8FAFC", fontFamily: "'DM Sans', sans-serif" }}>
+        {children}
+      </div>
+      <style>{`
+        @keyframes adspin { to { transform: rotate(360deg); } }
+        .admin-select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px !important; }
+        .admin-select option { background: #1E293B; color: #F8FAFC; padding: 8px; }
+      `}</style>
+    </>
   );
 }
 
-// ── Score Badge Component ────────────────────────────────────────────
-function ScoreBadge({ score }) {
-  if (!score) return <span style={{ color:"#475569", fontSize:"12px" }}>—</span>;
-  const s = String(score);
+// ── Stat Card ────────────────────────────────────────────────────────
+function StatCard({ label, value, sub, color }) {
   return (
-    <span style={{
-      padding:"3px 10px", borderRadius:"6px", fontSize:"12px", fontWeight:700,
-      background:`${SCORE_COLORS[s] || "#64748B"}18`, color: SCORE_COLORS[s] || "#94A3B8",
-    }}>{s}/5</span>
+    <div style={{ ...glass, padding: "18px", flex: 1, minWidth: "140px" }}>
+      <div style={{ fontSize: "11px", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>{label}</div>
+      <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "'Outfit', sans-serif", color: color || "#F8FAFC" }}>{value}</div>
+      {sub && <div style={{ fontSize: "11px", color: "#475569", marginTop: "4px" }}>{sub}</div>}
+    </div>
   );
 }
 
 // ══════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════════════
-
 export default function AdminDashboard({ onBack }) {
-  const [data, setData] = useState({ interviews:[], oa:[], behavioural:[], resume:[], ppt:[], helpers:[], settings:{ interviewers:[], rooms:[] } });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newRow, setNewRow] = useState({ name:"",email:"",areaOfInterest:"",interviewer:"",timeSlot:"",room:"",scorecard:"",feedback:"",checkin:"No" });
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [domain, setDomain] = useState("All");
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(null);
+  const [savedItems, setSavedItems] = useState({});
+  const pollRef = useRef(null);
 
-  const fetchData = useCallback(async () => {
+  // ── Fetch all admin data ──
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const res = await fetch("/api/sheets?action=all-stations");
-      const result = await res.json();
-      setData({
-        interviews: Array.isArray(result.interviews) ? result.interviews : [],
-        oa: Array.isArray(result.oa) ? result.oa : [],
-        behavioural: Array.isArray(result.behavioural) ? result.behavioural : [],
-        resume: Array.isArray(result.resume) ? result.resume : [],
-        ppt: Array.isArray(result.ppt) ? result.ppt : [],
-        helpers: Array.isArray(result.helpers) ? result.helpers : [],
-        settings: { interviewers: result.settings?.interviewers || [], rooms: result.settings?.rooms || [] },
-      });
-    } catch (err) { console.error("Failed to load:", err); }
-    finally { setLoading(false); }
+      const res = await fetch("/api/sheets?action=admin-all");
+      if (res.ok) {
+        const result = await res.json();
+        setData(result);
+      }
+    } catch {}
+    finally { if (!silent) setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    pollRef.current = setInterval(() => fetchData(true), 60000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [fetchData]);
 
-  // ── Generic update handler ──
-  async function handleStationUpdate(station, action, index, field, value) {
-    // Optimistic update
-    const key = station === "interview" ? "interviews" : station;
-    const updated = [...data[key]];
-    updated[index] = { ...updated[index], [field]: value };
-    setData((prev) => ({ ...prev, [key]: updated }));
-    setSaving(`${station}-${index}`);
-    try {
-      await fetch("/api/update", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ action, rowIndex: index, data: updated[index] }),
-      });
-    } catch (err) { console.error("Save failed:", err); }
-    finally { setSaving(null); }
+  // ── Helpers ──
+  function flashSaved(key) {
+    setSavedItems((p) => ({ ...p, [key]: true }));
+    setTimeout(() => setSavedItems((p) => { const n = { ...p }; delete n[key]; return n; }), 2000);
   }
 
-  // ── Interview-specific handlers ──
-  async function handleInterviewUpdate(index, field, value) {
-    const updated = [...data.interviews];
-    updated[index] = { ...updated[index], [field]: value };
-    setData((prev) => ({ ...prev, interviews: updated }));
-    setSaving(`interview-${index}`);
-    try {
-      await fetch("/api/update", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ action:"update", rowIndex: index, data: updated[index] }),
-      });
-    } catch (err) { console.error("Save failed:", err); }
-    finally { setSaving(null); }
+  function filterByDomain(list) {
+    if (domain === "All") return list;
+    return list.filter((r) => r.domain === domain);
   }
 
-  async function handleAddRow() {
-    if (!newRow.name) return;
-    setSaving("add");
-    try {
-      await fetch("/api/update", { method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ action:"add", data: newRow }) });
-      await fetchData();
-      setNewRow({ name:"",email:"",areaOfInterest:"",interviewer:"",timeSlot:"",room:"",scorecard:"",feedback:"",checkin:"No" });
-      setShowAddForm(false);
-    } catch (err) { console.error("Add failed:", err); }
-    finally { setSaving(null); }
-  }
-
-  async function handleDeleteInterview(index, name) {
-    if (!window.confirm(`Remove ${name} from Active Interviews?`)) return;
-    setSaving(`interview-${index}`);
-    try {
-      await fetch("/api/update", { method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ action:"delete", rowIndex: index }) });
-      await fetchData();
-    } catch (err) { console.error("Delete failed:", err); }
-    finally { setSaving(null); }
-  }
-
-  // Filter helpers
-  const assignedNames = new Set(data.interviews.map((i) => i.name).filter(Boolean));
-  const availableCandidates = data.helpers.filter((c) => !assignedNames.has(c.name));
-
-  function filterList(list) {
-    if (!searchTerm) return list;
-    const s = searchTerm.toLowerCase();
+  function filterBySearch(list) {
+    if (!search.trim()) return list;
+    const s = search.toLowerCase();
     return list.filter((r) => (r.name || "").toLowerCase().includes(s) || (r.email || "").toLowerCase().includes(s));
   }
 
-  // ── Stats for overview ──
-  const overviewStats = {
-    interview: { total: data.interviews.length, checkedIn: data.interviews.filter((i) => i.checkin === "Yes").length, scored: data.interviews.filter((i) => i.scorecard).length },
-    oa: { total: data.oa.length, checkedIn: data.oa.length, scored: data.oa.filter((i) => i.score).length },
-    behavioural: { total: data.behavioural.length, checkedIn: data.behavioural.length, scored: data.behavioural.filter((i) => i.score).length },
-    resume: { total: data.resume.length, checkedIn: data.resume.length, scored: data.resume.filter((i) => i.score).length },
-    ppt: { total: data.ppt.length, checkedIn: data.ppt.length, scored: data.ppt.filter((i) => i.score).length },
-  };
-
-  if (loading) {
+  // ── Domain filter bar ──
+  function DomainBar() {
     return (
-      <div style={{ minHeight:"100vh", background:"#0B1120", color:"#F8FAFC", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI', system-ui, sans-serif" }}>
-        <div style={{ textAlign:"center" }}>
-          <div style={{ fontSize:"40px", marginBottom:"12px" }}>⚡</div>
-          <p style={{ color:"#94A3B8", fontSize:"15px" }}>Loading all stations...</p>
-        </div>
+      <div style={{ display: "flex", gap: "5px", overflowX: "auto", paddingBottom: "4px", marginBottom: "16px" }}>
+        {DOMAINS.map((d) => (
+          <button key={d} onClick={() => setDomain(d)} style={{
+            padding: "6px 12px", borderRadius: "8px", border: "none", cursor: "pointer",
+            fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap",
+            background: domain === d ? "rgba(139,92,246,0.2)" : "rgba(255,255,255,0.04)",
+            color: domain === d ? "#A78BFA" : "#64748B",
+          }}>{d}</button>
+        ))}
       </div>
     );
   }
 
-  return (
-    <div style={{ minHeight:"100vh", background:"#0B1120", color:"#F8FAFC", fontFamily:"'Segoe UI', system-ui, sans-serif" }}>
-      <div style={{ maxWidth:"1280px", margin:"0 auto", padding:"16px 20px" }}>
+  // ── Front Desk: check in ──
+  async function handleFrontDeskCheckin(candidate) {
+    setSaving(candidate.email);
+    try {
+      await fetch("/api/update", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "checkin-frontdesk",
+          name: candidate.name, email: candidate.email,
+          domain: candidate.domain, jobRole: candidate.jobRole,
+        }),
+      });
+      flashSaved(candidate.email);
+      await fetchData(true);
+    } catch {}
+    finally { setSaving(null); }
+  }
 
-        {/* ── Header ── */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"16px", flexWrap:"wrap", gap:"10px" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
-            {onBack && <button onClick={onBack} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", color:"#94A3B8", padding:"8px 14px", borderRadius:"10px", cursor:"pointer", fontSize:"14px" }}>← Menu</button>}
-            <div>
-              <h1 style={{ fontSize:"20px", fontWeight:700, margin:0 }}>Admin Dashboard</h1>
-              <p style={{ color:"#64748B", fontSize:"12px", margin:"2px 0 0" }}>Manage all stations</p>
-            </div>
+  // ── IA: qualify/disqualify single candidate ──
+  async function handleQualifySingle(rowIndex, qualified) {
+    setSaving(`qualify-${rowIndex}`);
+    try {
+      await fetch("/api/update", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "batch-qualify", updates: [{ rowIndex, qualified }] }),
+      });
+      flashSaved(`qualify-${rowIndex}`);
+      await fetchData(true);
+    } catch {}
+    finally { setSaving(null); }
+  }
+
+  // ── IA: mark all remaining pending as Not Qualified ──
+  async function handleMarkRestNotQualified() {
+    const pending = (domain === "All" ? ia : ia.filter((r) => r.domain === domain))
+      .filter((r) => r.email && r.score && r.qualified === "Pending");
+    if (pending.length === 0) return;
+    setSaving("mark-rest");
+    try {
+      const updates = pending.map((r) => ({ rowIndex: r.rowIndex, qualified: "No" }));
+      await fetch("/api/update", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "batch-qualify", updates }),
+      });
+      flashSaved("mark-rest");
+      await fetchData(true);
+    } catch {}
+    finally { setSaving(null); }
+  }
+
+  // ── Assign interview ──
+  async function handleAssignInterview(candidate, interviewer, timeSlot, room) {
+    setSaving(candidate.email);
+    try {
+      await fetch("/api/update", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add",
+          data: {
+            name: candidate.name, email: candidate.email,
+            domain: candidate.domain, jobRole: candidate.jobRole,
+            interviewer, timeSlot, room, checkin: "No",
+          },
+        }),
+      });
+      flashSaved(candidate.email);
+      await fetchData(true);
+    } catch {}
+    finally { setSaving(null); }
+  }
+
+  // ── Loading ──
+  if (loading && !data) {
+    return (
+      <Wrapper>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+          <div style={{ textAlign: "center" }}>
+            <span style={{ width: "32px", height: "32px", border: "3px solid rgba(255,255,255,0.1)", borderTopColor: "#A78BFA", borderRadius: "50%", display: "inline-block", animation: "adspin 0.6s linear infinite" }} />
+            <div style={{ marginTop: "16px", color: "#64748B", fontSize: "14px" }}>Loading admin data...</div>
           </div>
-          <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
-            <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search name or email..." style={{ ...cellInp, width:"200px" }} />
-            <button onClick={fetchData} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", color:"#94A3B8", padding:"8px 14px", borderRadius:"10px", cursor:"pointer", fontSize:"13px" }}>🔄</button>
+        </div>
+      </Wrapper>
+    );
+  }
+
+  if (!data) return null;
+
+  const { interviews = [], ia = [], behavioural = [], resume = [], frontDesk = [], helpers = [], settings = {}, threshold = 5 } = data;
+  const interviewerList = settings.interviewers || [];
+  const roomList = settings.rooms || [];
+
+  // Already assigned emails (to avoid double-assigning)
+  const assignedEmails = new Set(interviews.map((r) => r.email.toLowerCase().trim()));
+
+  // ══════════════════════════════════════════════════════════════════
+  // RENDER
+  // ══════════════════════════════════════════════════════════════════
+  return (
+    <Wrapper>
+      <div style={{ maxWidth: "700px", margin: "0 auto", padding: "16px" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <div>
+            <h1 style={{ fontSize: "20px", fontWeight: 800, margin: 0, fontFamily: "'Outfit', sans-serif" }}>⚡ Admin Portal</h1>
+            <p style={{ color: "#64748B", fontSize: "12px", margin: "4px 0 0" }}>Career Fair 2026</p>
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button onClick={() => fetchData()} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#64748B", padding: "8px 12px", borderRadius: "8px", cursor: "pointer", fontSize: "12px" }}>🔄</button>
+            <button onClick={onBack} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#64748B", padding: "8px 12px", borderRadius: "8px", cursor: "pointer", fontSize: "12px" }}>← Exit</button>
           </div>
         </div>
 
-        {/* ── Tab Bar ── */}
-        <div style={{ display:"flex", gap:"4px", marginBottom:"20px", overflowX:"auto", paddingBottom:"4px" }}>
-          {TABS.map((tab) => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
-              padding:"10px 16px", borderRadius:"10px 10px 0 0", border:"none", cursor:"pointer",
-              fontSize:"13px", fontWeight:600, whiteSpace:"nowrap", transition:"all 0.2s",
-              background: activeTab === tab.key ? `${tab.color}18` : "transparent",
-              color: activeTab === tab.key ? tab.color : "#64748B",
-              borderBottom: activeTab === tab.key ? `2px solid ${tab.color}` : "2px solid transparent",
-            }}>
-              {tab.icon} {tab.label}
-              {tab.key !== "overview" && (
-                <span style={{ marginLeft:"6px", padding:"2px 6px", borderRadius:"6px", fontSize:"11px",
-                  background: activeTab === tab.key ? `${tab.color}25` : "rgba(255,255,255,0.06)",
-                  color: activeTab === tab.key ? tab.color : "#64748B",
-                }}>
-                  {tab.key === "interview" ? data.interviews.length : (data[tab.key]?.length || 0)}
-                </span>
-              )}
-            </button>
+        {/* Tab bar */}
+        <div style={{ display: "flex", gap: "4px", overflowX: "auto", marginBottom: "20px", paddingBottom: "4px" }}>
+          {TABS.map((t) => (
+            <button key={t.key} onClick={() => { setActiveTab(t.key); setDomain("All"); setSearch(""); }} style={{
+              padding: "8px 14px", borderRadius: "10px", border: "none", cursor: "pointer",
+              fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap",
+              background: activeTab === t.key ? "rgba(139,92,246,0.2)" : "rgba(255,255,255,0.03)",
+              color: activeTab === t.key ? "#A78BFA" : "#64748B",
+              fontFamily: "'Outfit', sans-serif",
+            }}>{t.icon} {t.label}</button>
           ))}
         </div>
 
-        {/* ── Tab Content ── */}
-
-        {/* OVERVIEW TAB */}
+        {/* ═══════════════════════════════════════════════════════ */}
+        {/* OVERVIEW TAB                                           */}
+        {/* ═══════════════════════════════════════════════════════ */}
         {activeTab === "overview" && (
-          <div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:"12px", marginBottom:"24px" }}>
-              {TABS.filter((t) => t.key !== "overview").map((tab) => {
-                const st = overviewStats[tab.key] || { total:0, checkedIn:0, scored:0 };
-                const pct = st.checkedIn > 0 ? Math.round((st.scored / st.checkedIn) * 100) : 0;
-                return (
-                  <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
-                    background:"rgba(255,255,255,0.04)", borderRadius:"16px", border:`1px solid ${tab.color}20`,
-                    padding:"20px", textAlign:"left", cursor:"pointer", color:"#F8FAFC", transition:"all 0.2s",
-                  }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"12px" }}>
-                      <span style={{ fontSize:"24px" }}>{tab.icon}</span>
-                      <span style={{ fontSize:"11px", padding:"4px 8px", borderRadius:"6px", background:`${tab.color}15`, color:tab.color, fontWeight:600 }}>
-                        {pct}% scored
+          <>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "16px" }}>
+              <StatCard label="Front Desk" value={`${frontDesk.filter((r) => r.checkedIn).length}/${frontDesk.length}`} sub="checked in" color="#4ADE80" />
+              <StatCard label="IA Scored" value={`${ia.filter((r) => r.score).length}/${ia.filter((r) => r.email).length}`} sub={`threshold: ${threshold}`} color="#F59E0B" />
+            </div>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "16px" }}>
+              <StatCard label="Qualified" value={ia.filter((r) => r.qualified === "Yes").length} sub="for panel interview" color="#22C55E" />
+              <StatCard label="Interviews" value={`${interviews.filter((r) => r.techScore).length}/${interviews.length}`} sub="assigned" color="#6366F1" />
+            </div>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "16px" }}>
+              <StatCard label="Behavioural" value={`${behavioural.filter((r) => r.score).length}/${behavioural.filter((r) => r.email).length}`} sub="scored" color="#EC4899" />
+              <StatCard label="Resume" value={`${resume.filter((r) => r.score).length}/${resume.filter((r) => r.email).length}`} sub="scored" color="#14B8A6" />
+            </div>
+
+            {/* Per-domain breakdown */}
+            <div style={{ ...glass, padding: "18px", marginBottom: "16px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, fontFamily: "'Outfit', sans-serif", marginBottom: "14px" }}>Qualified by Domain</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {DOMAINS.filter((d) => d !== "All").map((d) => {
+                  const domainIA = ia.filter((r) => r.domain === d && r.email);
+                  const scored = domainIA.filter((r) => r.score).length;
+                  const qualified = domainIA.filter((r) => r.qualified === "Yes").length;
+                  const total = domainIA.length;
+                  if (total === 0) return null;
+                  return (
+                    <div key={d} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", borderRadius: "8px", background: "rgba(255,255,255,0.02)" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 500 }}>{d}</span>
+                      <span style={{ fontSize: "12px", color: "#64748B" }}>
+                        <span style={{ color: "#F59E0B" }}>{scored}/{total} scored</span>
+                        {" · "}
+                        <span style={{ color: "#22C55E" }}>{qualified} qualified</span>
                       </span>
                     </div>
-                    <div style={{ fontSize:"15px", fontWeight:600, marginBottom:"8px" }}>{tab.label}</div>
-                    <div style={{ display:"flex", gap:"16px" }}>
-                      <div><span style={{ fontSize:"20px", fontWeight:700, color:tab.color }}>{st.checkedIn}</span><span style={{ fontSize:"11px", color:"#64748B", marginLeft:"4px" }}>checked in</span></div>
-                      <div><span style={{ fontSize:"20px", fontWeight:700, color:"#22C55E" }}>{st.scored}</span><span style={{ fontSize:"11px", color:"#64748B", marginLeft:"4px" }}>scored</span></div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════ */}
+        {/* FRONT DESK TAB                                         */}
+        {/* ═══════════════════════════════════════════════════════ */}
+        {activeTab === "frontdesk" && (
+          <>
+            <div style={{ marginBottom: "14px" }}>
+              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or email..." style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ fontSize: "12px", color: "#64748B", marginBottom: "12px" }}>
+              {frontDesk.filter((r) => r.checkedIn).length}/{frontDesk.length} checked in
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {filterBySearch(frontDesk).sort((a, b) => (a.checkedIn === b.checkedIn ? 0 : a.checkedIn ? 1 : -1)).map((c, i) => (
+                <div key={i} style={{
+                  ...glass, padding: "14px 16px",
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  borderColor: c.checkedIn ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.08)",
+                  background: c.checkedIn ? "rgba(34,197,94,0.03)" : "rgba(255,255,255,0.04)",
+                }}>
+                  <div>
+                    <div style={{ fontSize: "14px", fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{c.name}</div>
+                    <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>{c.domain} · {c.jobRole}</div>
+                  </div>
+                  {c.checkedIn ? (
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "6px", background: "rgba(34,197,94,0.1)", color: "#4ADE80", fontWeight: 600 }}>✓ Checked In</span>
+                      <div style={{ fontSize: "10px", color: "#475569", marginTop: "4px" }}>{c.checkInTime}</div>
                     </div>
-                    {/* Mini progress bar */}
-                    <div style={{ marginTop:"12px", height:"4px", borderRadius:"2px", background:"rgba(255,255,255,0.06)" }}>
-                      <div style={{ height:"100%", borderRadius:"2px", background:tab.color, width:`${pct}%`, transition:"width 0.5s ease" }} />
+                  ) : (
+                    <button onClick={() => handleFrontDeskCheckin(c)} disabled={saving === c.email} style={{
+                      padding: "8px 16px", borderRadius: "8px", border: "none",
+                      background: saving === c.email ? "rgba(255,255,255,0.1)" : savedItems[c.email] ? "rgba(34,197,94,0.2)" : "linear-gradient(135deg, #8B5CF6, #6366F1)",
+                      color: "#FFF", fontSize: "12px", fontWeight: 700, cursor: saving === c.email ? "wait" : "pointer",
+                      fontFamily: "'Outfit', sans-serif",
+                    }}>{saving === c.email ? "..." : savedItems[c.email] ? "✓" : "Check In"}</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════ */}
+        {/* IA RESULTS TAB                                         */}
+        {/* ═══════════════════════════════════════════════════════ */}
+        {activeTab === "ia" && (() => {
+          const filtered = filterByDomain(ia).filter((r) => r.email).sort((a, b) => {
+            const aScore = parseFloat(a.score) || 0;
+            const bScore = parseFloat(b.score) || 0;
+            return bScore - aScore; // descending
+          });
+          const scored = filtered.filter((r) => r.score).length;
+          const qualifiedCount = filtered.filter((r) => r.qualified === "Yes").length;
+          const notQualifiedCount = filtered.filter((r) => r.qualified === "No").length;
+          const pendingCount = filtered.filter((r) => r.score && r.qualified === "Pending").length;
+
+          return (
+            <>
+              <DomainBar />
+              <div style={{ fontSize: "12px", color: "#64748B", marginBottom: "14px" }}>
+                <span style={{ color: "#F59E0B" }}>{scored} scored</span> · <span style={{ color: "#22C55E" }}>{qualifiedCount} qualified</span> · <span style={{ color: "#F87171" }}>{notQualifiedCount} not qualified</span>
+                {pendingCount > 0 && <span> · <span style={{ color: "#F97316" }}>{pendingCount} pending</span></span>}
+              </div>
+              {pendingCount > 0 && (
+                <button onClick={handleMarkRestNotQualified} disabled={saving === "mark-rest"} style={{
+                  marginLeft: "auto", padding: "7px 16px", borderRadius: "8px",
+                  border: "1px solid rgba(239,68,68,0.2)", background: saving === "mark-rest" ? "rgba(255,255,255,0.1)" : savedItems["mark-rest"] ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.08)",
+                  color: savedItems["mark-rest"] ? "#4ADE80" : "#F87171",
+                  fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: "'Outfit', sans-serif", whiteSpace: "nowrap",
+                }}>{saving === "mark-rest" ? "Updating..." : savedItems["mark-rest"] ? "✓ Done" : `Mark Rest Not Qualified (${pendingCount})`}</button>
+              )}
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {filtered.map((row) => {
+                  const isQualified = row.qualified === "Yes";
+                  const isNotQualified = row.qualified === "No";
+                  const hasScore = !!row.score;
+                  const isSavingThis = saving === `qualify-${row.rowIndex}`;
+                  const isSavedThis = savedItems[`qualify-${row.rowIndex}`];
+
+                  return (
+                    <div key={row.rowIndex} style={{
+                      ...glass, padding: "14px 16px",
+                      display: "flex", alignItems: "center", gap: "12px",
+                      borderColor: isQualified ? "rgba(34,197,94,0.15)" : isNotQualified ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.08)",
+                      background: isQualified ? "rgba(34,197,94,0.03)" : isNotQualified ? "rgba(239,68,68,0.02)" : "rgba(255,255,255,0.04)",
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "14px", fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{row.name}</div>
+                        <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>{row.domain}</div>
+                        {row.comments && <div style={{ fontSize: "11px", color: "#475569", marginTop: "4px", fontStyle: "italic" }}>{row.comments}</div>}
+                      </div>
+
+                      {/* Score */}
+                      <div style={{ textAlign: "center", flexShrink: 0, minWidth: "40px" }}>
+                        {hasScore ? (
+                          <div style={{ fontSize: "20px", fontWeight: 800, fontFamily: "'Outfit', sans-serif", color: parseFloat(row.score) >= threshold ? "#22C55E" : "#F97316" }}>
+                            {row.score}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: "11px", color: "#475569" }}>—</span>
+                        )}
+                      </div>
+
+                      {/* Qualify / Disqualify button */}
+                      <div style={{ flexShrink: 0 }}>
+                        {!hasScore ? (
+                          <span style={{ fontSize: "10px", color: "#475569" }}>No score</span>
+                        ) : isSavingThis ? (
+                          <span style={{ fontSize: "11px", color: "#64748B" }}>...</span>
+                        ) : isSavedThis ? (
+                          <span style={{ fontSize: "11px", color: "#4ADE80", fontWeight: 600 }}>✓ Updated</span>
+                        ) : isQualified ? (
+                          <button onClick={() => handleQualifySingle(row.rowIndex, "No")} style={{
+                            padding: "6px 14px", borderRadius: "8px", border: "1px solid rgba(239,68,68,0.2)",
+                            background: "rgba(239,68,68,0.08)", color: "#F87171",
+                            fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: "'Outfit', sans-serif",
+                          }}>Disqualify</button>
+                        ) : isNotQualified ? (
+                          <button onClick={() => handleQualifySingle(row.rowIndex, "Yes")} style={{
+                            padding: "6px 14px", borderRadius: "8px", border: "1px solid rgba(34,197,94,0.2)",
+                            background: "rgba(34,197,94,0.08)", color: "#4ADE80",
+                            fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: "'Outfit', sans-serif",
+                          }}>Qualify</button>
+                        ) : (
+                          <button onClick={() => handleQualifySingle(row.rowIndex, "Yes")} style={{
+                            padding: "6px 14px", borderRadius: "8px", border: "none",
+                            background: "linear-gradient(135deg, #22C55E, #16A34A)", color: "#FFF",
+                            fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: "'Outfit', sans-serif",
+                          }}>Qualify</button>
+                        )}
+                      </div>
                     </div>
-                  </button>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
+
+        {/* ═══════════════════════════════════════════════════════ */}
+        {/* ASSIGN INTERVIEWS TAB                                  */}
+        {/* ═══════════════════════════════════════════════════════ */}
+        {activeTab === "assign" && (() => {
+          const qualified = ia.filter((r) => r.qualified === "Yes" && r.email);
+          // Merge jobRole from helpers
+          const helperMap = {};
+          helpers.forEach((h) => { if (h.email) helperMap[h.email.toLowerCase().trim()] = h; });
+          const candidates = qualified.map((q) => {
+            const helper = helperMap[(q.email || "").toLowerCase().trim()];
+            return { ...q, jobRole: helper?.jobRole || "" };
+          });
+          const filtered = filterByDomain(candidates).filter((c) => !assignedEmails.has(c.email.toLowerCase().trim()));
+          const alreadyAssigned = filterByDomain(candidates).filter((c) => assignedEmails.has(c.email.toLowerCase().trim()));
+
+          return (
+            <>
+              <DomainBar />
+              <div style={{ fontSize: "12px", color: "#64748B", marginBottom: "12px" }}>
+                <span style={{ color: "#F59E0B" }}>{filtered.length} to assign</span> · <span style={{ color: "#22C55E" }}>{alreadyAssigned.length} assigned</span>
+              </div>
+
+              {filtered.length === 0 && alreadyAssigned.length === 0 && (
+                <div style={{ ...glass, padding: "40px", textAlign: "center" }}>
+                  <div style={{ fontSize: "14px", color: "#64748B" }}>No qualified candidates for this domain yet.</div>
+                </div>
+              )}
+
+              {/* Unassigned candidates */}
+              {filtered.map((c) => (
+                <AssignCard key={c.email} candidate={c} interviewerList={interviewerList} roomList={roomList}
+                  saving={saving} savedItems={savedItems} onAssign={handleAssignInterview} />
+              ))}
+
+              {/* Already assigned */}
+              {alreadyAssigned.length > 0 && (
+                <div style={{ marginTop: "20px" }}>
+                  <div style={{ fontSize: "12px", color: "#475569", fontWeight: 600, marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Already Assigned</div>
+                  {alreadyAssigned.map((c) => {
+                    const interview = interviews.find((r) => r.email.toLowerCase().trim() === c.email.toLowerCase().trim());
+                    return (
+                      <div key={c.email} style={{ ...glass, padding: "14px 16px", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center", borderColor: "rgba(34,197,94,0.1)", background: "rgba(34,197,94,0.02)" }}>
+                        <div>
+                          <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{c.name}</div>
+                          <div style={{ fontSize: "11px", color: "#64748B" }}>{c.domain}</div>
+                        </div>
+                        <div style={{ textAlign: "right", fontSize: "11px", color: "#64748B" }}>
+                          <div>{interview?.interviewer || "—"}</div>
+                          <div>{interview?.timeSlot || "—"} · {interview?.room || "—"}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          );
+        })()}
+
+        {/* ═══════════════════════════════════════════════════════ */}
+        {/* BEHAVIOURAL TAB                                        */}
+        {/* ═══════════════════════════════════════════════════════ */}
+        {activeTab === "behavioural" && (
+          <>
+            <DomainBar />
+            <div style={{ fontSize: "12px", color: "#64748B", marginBottom: "12px" }}>
+              {filterByDomain(behavioural).filter((r) => r.score && r.email).length}/{filterByDomain(behavioural).filter((r) => r.email).length} scored
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {filterByDomain(behavioural).filter((r) => r.email).sort((a, b) => (!!b.score === !!a.score ? 0 : b.score ? 1 : -1) * -1).map((row) => (
+                <div key={row.rowIndex} style={{
+                  ...glass, padding: "14px 16px",
+                  borderColor: row.score ? "rgba(34,197,94,0.1)" : "rgba(255,255,255,0.08)",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: "14px", fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{row.name}</div>
+                      <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>{row.domain}{row.room ? ` · Room ${row.room}` : ""}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      {row.score ? (
+                        <div style={{ fontSize: "18px", fontWeight: 800, fontFamily: "'Outfit', sans-serif", color: "#22C55E" }}>{row.score}/10</div>
+                      ) : (
+                        <span style={{ fontSize: "11px", padding: "4px 8px", borderRadius: "6px", background: "rgba(59,130,246,0.1)", color: "#60A5FA" }}>In Progress</span>
+                      )}
+                    </div>
+                  </div>
+                  {row.feedback && <div style={{ fontSize: "12px", color: "#94A3B8", marginTop: "8px", fontStyle: "italic", lineHeight: 1.5 }}>{row.feedback}</div>}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════ */}
+        {/* RESUME TAB                                             */}
+        {/* ═══════════════════════════════════════════════════════ */}
+        {activeTab === "resume" && (
+          <>
+            <DomainBar />
+            <div style={{ fontSize: "12px", color: "#64748B", marginBottom: "12px" }}>
+              {filterByDomain(resume).filter((r) => r.score && r.email).length}/{filterByDomain(resume).filter((r) => r.email).length} scored
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {filterByDomain(resume).filter((r) => r.email).sort((a, b) => (!!b.score === !!a.score ? 0 : b.score ? 1 : -1) * -1).map((row) => (
+                <div key={row.rowIndex} style={{
+                  ...glass, padding: "14px 16px",
+                  borderColor: row.score ? "rgba(34,197,94,0.1)" : "rgba(255,255,255,0.08)",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: "14px", fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{row.name}</div>
+                      <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>{row.domain}{row.jobRole ? ` · ${row.jobRole}` : ""}</div>
+                    </div>
+                    <div>
+                      {row.score ? (
+                        <div style={{ fontSize: "18px", fontWeight: 800, fontFamily: "'Outfit', sans-serif", color: "#22C55E" }}>{row.score}/10</div>
+                      ) : (
+                        <span style={{ fontSize: "11px", padding: "4px 8px", borderRadius: "6px", background: "rgba(59,130,246,0.1)", color: "#60A5FA" }}>In Progress</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════ */}
+        {/* PANEL INTERVIEWS TAB                                   */}
+        {/* ═══════════════════════════════════════════════════════ */}
+        {activeTab === "panel" && (
+          <>
+            <DomainBar />
+            <div style={{ fontSize: "12px", color: "#64748B", marginBottom: "12px" }}>
+              {filterByDomain(interviews).filter((r) => r.techScore).length}/{filterByDomain(interviews).length} completed
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {filterByDomain(interviews).sort((a, b) => {
+                // Active first, then pending, then completed
+                const aActive = a.checkin === "Yes" && !a.techScore;
+                const bActive = b.checkin === "Yes" && !b.techScore;
+                const aDone = !!a.techScore;
+                const bDone = !!b.techScore;
+                if (aActive !== bActive) return aActive ? -1 : 1;
+                if (aDone !== bDone) return aDone ? 1 : -1;
+                return 0;
+              }).map((row) => {
+                const isActive = row.checkin === "Yes" && !row.techScore;
+                const isDone = !!row.techScore;
+                return (
+                  <div key={row.rowIndex} style={{
+                    ...glass, padding: "14px 16px",
+                    borderColor: isDone ? "rgba(34,197,94,0.1)" : isActive ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.08)",
+                    background: isActive ? "rgba(59,130,246,0.03)" : isDone ? "rgba(34,197,94,0.02)" : "rgba(255,255,255,0.04)",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{row.name}</div>
+                        <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>
+                          {row.domain} · {row.interviewer || "—"} · {row.timeSlot || "—"} · Room {row.room || "—"}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        {isDone ? (
+                          <div>
+                            <div style={{ fontSize: "13px", fontWeight: 700, color: "#22C55E" }}>Tech: {row.techScore}/10</div>
+                            {row.pptScore && <div style={{ fontSize: "13px", fontWeight: 700, color: "#3B82F6", marginTop: "2px" }}>PPT: {row.pptScore}/10</div>}
+                          </div>
+                        ) : isActive ? (
+                          <span style={{ fontSize: "11px", padding: "4px 8px", borderRadius: "6px", background: "rgba(59,130,246,0.1)", color: "#60A5FA", fontWeight: 600 }}>In Progress</span>
+                        ) : (
+                          <span style={{ fontSize: "11px", padding: "4px 8px", borderRadius: "6px", background: "rgba(245,158,11,0.1)", color: "#FBBF24", fontWeight: 600 }}>Waiting</span>
+                        )}
+                      </div>
+                    </div>
+                    {(row.techFeedback || row.pptFeedback) && (
+                      <div style={{ marginTop: "8px", fontSize: "12px", color: "#94A3B8", fontStyle: "italic", lineHeight: 1.5 }}>
+                        {row.techFeedback && <div>Tech: {row.techFeedback}</div>}
+                        {row.pptFeedback && <div>PPT: {row.pptFeedback}</div>}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
-            <div style={{ background:"rgba(255,255,255,0.04)", borderRadius:"12px", border:"1px solid rgba(255,255,255,0.06)", padding:"20px", textAlign:"center", color:"#64748B", fontSize:"13px" }}>
-              Click any station card above to manage it, or use the tabs at the top.
-            </div>
-          </div>
-        )}
-
-        {/* TECHNICAL INTERVIEW TAB */}
-        {activeTab === "interview" && (
-          <div>
-            {/* Add Form Toggle */}
-            <div style={{ display:"flex", gap:"8px", marginBottom:"16px" }}>
-              <button onClick={() => setShowAddForm(!showAddForm)} style={{
-                background:"rgba(59,130,246,0.15)", border:"1px solid rgba(59,130,246,0.3)",
-                color:"#60A5FA", padding:"8px 16px", borderRadius:"10px", cursor:"pointer", fontSize:"13px", fontWeight:600,
-              }}>+ Assign Candidate</button>
-            </div>
-
-            {/* Add Form */}
-            {showAddForm && (
-              <div style={{ background:"rgba(255,255,255,0.04)", borderRadius:"16px", border:"1px solid rgba(255,255,255,0.08)", padding:"24px", marginBottom:"16px" }}>
-                <h3 style={{ fontSize:"15px", fontWeight:600, margin:"0 0 16px 0" }}>Assign New Candidate</h3>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px" }}>
-                  <div>
-                    <label style={{ fontSize:"12px", color:"#94A3B8", display:"block", marginBottom:"4px" }}>Candidate</label>
-                    <SearchableDropdown options={availableCandidates.map((c) => c.name)} value={newRow.name}
-                      onChange={(name) => { const c = data.helpers.find((x) => x.name === name); setNewRow({ ...newRow, name, email:c?.email||"", areaOfInterest:c?.areaOfInterest||"" }); }}
-                      placeholder="Search candidate..." />
-                  </div>
-                  <div>
-                    <label style={{ fontSize:"12px", color:"#94A3B8", display:"block", marginBottom:"4px" }}>Interviewer</label>
-                    <select value={newRow.interviewer} onChange={(e) => setNewRow({ ...newRow, interviewer:e.target.value })} style={formSel}>
-                      <option value="">Select...</option>{data.settings.interviewers.map((i) => <option key={i} value={i}>{i}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize:"12px", color:"#94A3B8", display:"block", marginBottom:"4px" }}>Time Slot</label>
-                    <select value={newRow.timeSlot} onChange={(e) => setNewRow({ ...newRow, timeSlot:e.target.value })} style={formSel}>
-                      <option value="">Select...</option>{TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize:"12px", color:"#94A3B8", display:"block", marginBottom:"4px" }}>Room</label>
-                    <select value={newRow.room} onChange={(e) => setNewRow({ ...newRow, room:e.target.value })} style={formSel}>
-                      <option value="">Select...</option>{data.settings.rooms.map((r) => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div style={{ display:"flex", gap:"8px", marginTop:"16px" }}>
-                  <button onClick={handleAddRow} disabled={!newRow.name || saving === "add"} style={{
-                    padding:"10px 20px", borderRadius:"10px", border:"none", fontSize:"14px", fontWeight:600,
-                    cursor:newRow.name ? "pointer":"not-allowed", background:newRow.name ? "linear-gradient(135deg, #3B82F6, #6366F1)":"#334155", color:"#FFF",
-                  }}>{saving === "add" ? "Adding..." : "Add"}</button>
-                  <button onClick={() => setShowAddForm(false)} style={{ padding:"10px 20px", borderRadius:"10px", border:"1px solid rgba(255,255,255,0.1)", background:"transparent", color:"#94A3B8", cursor:"pointer", fontSize:"14px" }}>Cancel</button>
-                </div>
-              </div>
-            )}
-
-            {/* Interview Table */}
-            <StationTable
-              columns={["Name","Email","Domain","Interviewer","Time","Room","Score","Feedback","Check-in","Actions"]}
-              rows={filterList(data.interviews)}
-              allRows={data.interviews}
-              saving={saving}
-              renderRow={(row, fi, ri) => (
-                <>
-                  <Td>{row.name}</Td>
-                  <Td sub>{row.email}</Td>
-                  <Td sub>{row.areaOfInterest}</Td>
-                  <Td>
-                    <select value={row.interviewer} onChange={(e) => handleInterviewUpdate(ri,"interviewer",e.target.value)} style={cellSel}>
-                      <option value="">—</option>{data.settings.interviewers.map((i) => <option key={i} value={i}>{i}</option>)}
-                    </select>
-                  </Td>
-                  <Td>
-                    <select value={row.timeSlot} onChange={(e) => handleInterviewUpdate(ri,"timeSlot",e.target.value)} style={cellSel}>
-                      <option value="">—</option>{TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </Td>
-                  <Td>
-                    <select value={row.room} onChange={(e) => handleInterviewUpdate(ri,"room",e.target.value)} style={cellSel}>
-                      <option value="">—</option>{data.settings.rooms.map((r) => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </Td>
-                  <Td>
-                    <select value={row.scorecard} onChange={(e) => handleInterviewUpdate(ri,"scorecard",e.target.value)}
-                      style={{ ...cellSel, color:SCORE_COLORS[row.scorecard]||"#94A3B8", fontWeight:600 }}>
-                      <option value="">—</option>{SCORES.map((s) => <option key={s} value={s}>{s} - {SCORE_LABELS[s]}</option>)}
-                    </select>
-                  </Td>
-                  <Td><input type="text" value={row.feedback} onChange={(e) => handleInterviewUpdate(ri,"feedback",e.target.value)} placeholder="Notes..." style={cellInp} /></Td>
-                  <Td><CheckinBadge value={row.checkin} /></Td>
-                  <Td>
-                    <div style={{ display:"flex", gap:"6px", alignItems:"center" }}>
-                      {saving === `interview-${ri}` && <span style={{ color:"#22C55E", fontSize:"11px" }}>Saving...</span>}
-                      <button onClick={() => handleDeleteInterview(ri, row.name)} style={{
-                        background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.2)",
-                        color:"#F87171", padding:"4px 10px", borderRadius:"6px", cursor:"pointer", fontSize:"11px", whiteSpace:"nowrap",
-                      }}>🗑</button>
-                    </div>
-                  </Td>
-                </>
-              )}
-              emptyMessage="No interviews found. Click '+ Assign Candidate' to add one."
-            />
-          </div>
-        )}
-
-        {/* OA TAB */}
-        {activeTab === "oa" && (
-          <StationTable
-            columns={["Name","Email","Domain","Score",""]}
-            rows={filterList(data.oa)}
-            allRows={data.oa}
-            saving={saving}
-            renderRow={(row, fi, ri) => (
-              <>
-                <Td>{row.name}</Td>
-                <Td sub>{row.email}</Td>
-                <Td sub>{row.domain}</Td>
-                <Td>
-                  <select value={row.score} onChange={(e) => handleStationUpdate("oa","update-oa",ri,"score",e.target.value)}
-                    style={{ ...cellSel, color:SCORE_COLORS[row.score]||"#94A3B8", fontWeight:600 }}>
-                    <option value="">—</option>{SCORES.map((s) => <option key={s} value={s}>{s} - {SCORE_LABELS[s]}</option>)}
-                  </select>
-                </Td>
-                <Td>{saving === `oa-${ri}` && <span style={{ color:"#22C55E", fontSize:"11px" }}>Saving...</span>}</Td>
-              </>
-            )}
-            emptyMessage="No candidates have checked in for OA yet."
-          />
-        )}
-
-        {/* BEHAVIOURAL TAB */}
-        {activeTab === "behavioural" && (
-          <StationTable
-            columns={["Name","Email","Domain","Room","Score","Feedback",""]}
-            rows={filterList(data.behavioural)}
-            allRows={data.behavioural}
-            saving={saving}
-            renderRow={(row, fi, ri) => (
-              <>
-                <Td>{row.name}</Td>
-                <Td sub>{row.email}</Td>
-                <Td sub>{row.domain}</Td>
-                <Td><input type="text" value={row.room} onChange={(e) => handleStationUpdate("behavioural","update-behavioural",ri,"room",e.target.value)} placeholder="Room..." style={{ ...cellInp, width:"80px" }} /></Td>
-                <Td>
-                  <select value={row.score} onChange={(e) => handleStationUpdate("behavioural","update-behavioural",ri,"score",e.target.value)}
-                    style={{ ...cellSel, color:SCORE_COLORS[row.score]||"#94A3B8", fontWeight:600 }}>
-                    <option value="">—</option>{SCORES.map((s) => <option key={s} value={s}>{s} - {SCORE_LABELS[s]}</option>)}
-                  </select>
-                </Td>
-                <Td><input type="text" value={row.feedback} onChange={(e) => handleStationUpdate("behavioural","update-behavioural",ri,"feedback",e.target.value)} placeholder="Feedback..." style={cellInp} /></Td>
-                <Td>{saving === `behavioural-${ri}` && <span style={{ color:"#22C55E", fontSize:"11px" }}>Saving...</span>}</Td>
-              </>
-            )}
-            emptyMessage="No candidates have checked in for Behavioural Interview yet."
-          />
-        )}
-
-        {/* RESUME TAB */}
-        {activeTab === "resume" && (
-          <StationTable
-            columns={["Name","Email","Domain","Score","Notes",""]}
-            rows={filterList(data.resume)}
-            allRows={data.resume}
-            saving={saving}
-            renderRow={(row, fi, ri) => (
-              <>
-                <Td>{row.name}</Td>
-                <Td sub>{row.email}</Td>
-                <Td sub>{row.domain}</Td>
-                <Td>
-                  <select value={row.score} onChange={(e) => handleStationUpdate("resume","update-resume",ri,"score",e.target.value)}
-                    style={{ ...cellSel, color:SCORE_COLORS[row.score]||"#94A3B8", fontWeight:600 }}>
-                    <option value="">—</option>{SCORES.map((s) => <option key={s} value={s}>{s} - {SCORE_LABELS[s]}</option>)}
-                  </select>
-                </Td>
-                <Td><input type="text" value={row.notes} onChange={(e) => handleStationUpdate("resume","update-resume",ri,"notes",e.target.value)} placeholder="Keywords / notes..." style={{ ...cellInp, width:"180px" }} /></Td>
-                <Td>{saving === `resume-${ri}` && <span style={{ color:"#22C55E", fontSize:"11px" }}>Saving...</span>}</Td>
-              </>
-            )}
-            emptyMessage="No candidates have checked in for Resume Review yet."
-          />
-        )}
-
-        {/* PPT TAB */}
-        {activeTab === "ppt" && (
-          <StationTable
-            columns={["Name","Email","Domain","Score","Feedback",""]}
-            rows={filterList(data.ppt)}
-            allRows={data.ppt}
-            saving={saving}
-            renderRow={(row, fi, ri) => (
-              <>
-                <Td>{row.name}</Td>
-                <Td sub>{row.email}</Td>
-                <Td sub>{row.domain}</Td>
-                <Td>
-                  <select value={row.score} onChange={(e) => handleStationUpdate("ppt","update-ppt",ri,"score",e.target.value)}
-                    style={{ ...cellSel, color:SCORE_COLORS[row.score]||"#94A3B8", fontWeight:600 }}>
-                    <option value="">—</option>{SCORES.map((s) => <option key={s} value={s}>{s} - {SCORE_LABELS[s]}</option>)}
-                  </select>
-                </Td>
-                <Td><input type="text" value={row.feedback} onChange={(e) => handleStationUpdate("ppt","update-ppt",ri,"feedback",e.target.value)} placeholder="Feedback..." style={cellInp} /></Td>
-                <Td>{saving === `ppt-${ri}` && <span style={{ color:"#22C55E", fontSize:"11px" }}>Saving...</span>}</Td>
-              </>
-            )}
-            emptyMessage="No candidates have checked in for PPT Presentation yet."
-          />
+          </>
         )}
 
       </div>
-    </div>
+    </Wrapper>
   );
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// SHARED COMPONENTS
+// ASSIGN CARD (used in Assign tab)
 // ══════════════════════════════════════════════════════════════════════
+function AssignCard({ candidate, interviewerList, roomList, saving, savedItems, onAssign }) {
+  const [interviewer, setInterviewer] = useState("");
+  const [timeSlot, setTimeSlot] = useState("");
+  const [room, setRoom] = useState("");
+  const isSaving = saving === candidate.email;
+  const isSaved = savedItems[candidate.email];
 
-function Td({ children, sub }) {
-  return <td style={{ padding:"12px 14px", fontSize: sub ? "12px":"13px", color: sub ? "#94A3B8":"#F8FAFC", fontWeight: sub ? 400:500, whiteSpace:"nowrap" }}>{children}</td>;
-}
+  // Auto-fill room when interviewer is selected (matching Settings VLOOKUP logic)
+  useEffect(() => {
+    if (interviewer) {
+      const idx = interviewerList.indexOf(interviewer);
+      if (idx >= 0 && roomList[idx]) setRoom(roomList[idx]);
+    }
+  }, [interviewer, interviewerList, roomList]);
 
-function CheckinBadge({ value }) {
-  const yes = value === "Yes";
   return (
-    <span style={{
-      padding:"4px 10px", borderRadius:"8px", fontSize:"11px", fontWeight:600,
-      background: yes ? "rgba(34,197,94,0.12)":"rgba(245,158,11,0.12)",
-      color: yes ? "#22C55E":"#F59E0B",
-    }}>{yes ? "✓ Yes":"✗ No"}</span>
-  );
-}
-
-function StationTable({ columns, rows, allRows, saving, renderRow, emptyMessage }) {
-  return (
-    <div style={{ overflowX:"auto", borderRadius:"12px", border:"1px solid rgba(255,255,255,0.06)" }}>
-      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"13px" }}>
-        <thead>
-          <tr style={{ background:"rgba(255,255,255,0.04)" }}>
-            {columns.map((h, i) => (
-              <th key={i} style={{ padding:"12px 14px", textAlign:"left", color:"#64748B", fontSize:"11px", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.5px", whiteSpace:"nowrap" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, fi) => {
-            const ri = allRows.indexOf(row);
-            return (
-              <tr key={ri} style={{ borderTop:"1px solid rgba(255,255,255,0.04)" }}>
-                {renderRow(row, fi, ri)}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {rows.length === 0 && (
-        <div style={{ padding:"48px", textAlign:"center", color:"#64748B", fontSize:"14px" }}>{emptyMessage}</div>
-      )}
+    <div style={{ ...glass, padding: "16px", marginBottom: "10px" }}>
+      <div style={{ marginBottom: "12px" }}>
+        <div style={{ fontSize: "14px", fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{candidate.name}</div>
+        <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>{candidate.domain} · {candidate.jobRole} · IA: {candidate.score}/10</div>
+      </div>
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ flex: 1, minWidth: "140px" }}>
+          <label style={{ fontSize: "10px", color: "#64748B", display: "block", marginBottom: "6px" }}>Interviewer</label>
+          <select className="admin-select" value={interviewer} onChange={(e) => setInterviewer(e.target.value)} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", cursor: "pointer" }}>
+            <option value="">Select interviewer...</option>
+            {interviewerList.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: "0 0 130px" }}>
+          <label style={{ fontSize: "10px", color: "#64748B", display: "block", marginBottom: "6px" }}>Time Slot</label>
+          <select className="admin-select" value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", cursor: "pointer" }}>
+            <option value="">Select time...</option>
+            {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: "0 0 80px" }}>
+          <label style={{ fontSize: "10px", color: "#64748B", display: "block", marginBottom: "6px" }}>Room</label>
+          <input type="text" value={room} readOnly style={{ ...inputStyle, width: "100%", boxSizing: "border-box", color: "#94A3B8" }} />
+        </div>
+        <button
+          onClick={() => { if (interviewer && timeSlot) onAssign(candidate, interviewer, timeSlot, room); }}
+          disabled={!interviewer || !timeSlot || isSaving}
+          style={{
+            padding: "10px 16px", borderRadius: "8px", border: "none",
+            background: (!interviewer || !timeSlot) ? "rgba(255,255,255,0.05)" : isSaving ? "rgba(255,255,255,0.1)" : isSaved ? "rgba(34,197,94,0.2)" : "linear-gradient(135deg, #8B5CF6, #6366F1)",
+            color: (!interviewer || !timeSlot) ? "#475569" : "#FFF",
+            fontSize: "12px", fontWeight: 700, cursor: (!interviewer || !timeSlot || isSaving) ? "default" : "pointer",
+            fontFamily: "'Outfit', sans-serif", whiteSpace: "nowrap", flexShrink: 0,
+          }}
+        >
+          {isSaving ? "..." : isSaved ? "✓ Assigned" : "Assign"}
+        </button>
+      </div>
     </div>
   );
 }

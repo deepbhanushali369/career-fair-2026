@@ -1,82 +1,141 @@
 import { NextResponse } from "next/server";
 import {
-  updateInterviewRow, addInterviewRow, deleteInterviewRow, checkinInterview,
-  updateOARow, checkinOA,
-  updateBehaviouralRow, checkinBehavioral,
-  updateResumeRow, checkinResume,
-  updatePPTRow, checkinPPT,
+  updateInterviewRow, addInterviewRow, deleteInterviewRow,
+  checkinIA, checkinBehavioural, checkinResume,
+  checkInAtFrontDesk,
+  updateIARow, submitIAScore,
+  updateBehaviouralRow, submitBehaviouralScore,
+  updateResumeRow,
+  getCandidateByEmail,
+  setIAThreshold, batchQualifyIA,
 } from "@/lib/sheets";
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { action, rowIndex, data } = body;
+    const { action } = body;
 
     switch (action) {
-      // ── Active_Interviews CRUD ──
+      // ── Active_Interviews ──
       case "update": {
-        if (rowIndex === undefined || !data) return NextResponse.json({ error: "rowIndex and data required" }, { status: 400 });
-        await updateInterviewRow(rowIndex, data);
+        const { rowIndex, field, value } = body;
+        if (rowIndex === undefined || !field) return NextResponse.json({ error: "rowIndex and field required" }, { status: 400 });
+        await updateInterviewRow(rowIndex, field, value);
         return NextResponse.json({ success: true });
       }
       case "add": {
-        if (!data) return NextResponse.json({ error: "data required" }, { status: 400 });
-        await addInterviewRow(data);
+        if (!body.data) return NextResponse.json({ error: "data required" }, { status: 400 });
+        await addInterviewRow(body.data);
         return NextResponse.json({ success: true });
       }
       case "delete": {
+        const { rowIndex } = body;
         if (rowIndex === undefined) return NextResponse.json({ error: "rowIndex required" }, { status: 400 });
         await deleteInterviewRow(rowIndex);
         return NextResponse.json({ success: true });
       }
 
-      // ── Station-specific score updates (from admin) ──
-      case "update-oa": {
-        if (rowIndex === undefined || !data) return NextResponse.json({ error: "rowIndex and data required" }, { status: 400 });
-        await updateOARow(rowIndex, data);
-        return NextResponse.json({ success: true });
-      }
-      case "update-behavioural": {
-        if (rowIndex === undefined || !data) return NextResponse.json({ error: "rowIndex and data required" }, { status: 400 });
-        await updateBehaviouralRow(rowIndex, data);
-        return NextResponse.json({ success: true });
-      }
-      case "update-resume": {
-        if (rowIndex === undefined || !data) return NextResponse.json({ error: "rowIndex and data required" }, { status: 400 });
-        await updateResumeRow(rowIndex, data);
-        return NextResponse.json({ success: true });
-      }
-      case "update-ppt": {
-        if (rowIndex === undefined || !data) return NextResponse.json({ error: "rowIndex and data required" }, { status: 400 });
-        await updatePPTRow(rowIndex, data);
-        return NextResponse.json({ success: true });
-      }
-
-      // ── Check-in actions (from candidate portal) ──
+      // ── Check-ins ──
       case "checkin-interview": {
-        if (!data?.email) return NextResponse.json({ error: "email required" }, { status: 400 });
-        const ok = await checkinInterview(data.email);
-        if (!ok) return NextResponse.json({ error: "Email not found in Active_Interviews" }, { status: 404 });
+        const { email } = body;
+        if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
+        const candidate = await getCandidateByEmail(email);
+        if (!candidate) return NextResponse.json({ error: "Not found in Active_Interviews" }, { status: 404 });
+        await updateInterviewRow(candidate.rowIndex, "checkin", "Yes");
         return NextResponse.json({ success: true });
       }
-      case "checkin-oa": {
-        if (!data?.email) return NextResponse.json({ error: "email required" }, { status: 400 });
-        await checkinOA(data.name, data.email, data.domain);
+      case "checkin-ia": {
+        const { name, email, domain } = body;
+        if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
+        await checkinIA(name, email, domain);
         return NextResponse.json({ success: true });
       }
       case "checkin-behavioral": {
-        if (!data?.email) return NextResponse.json({ error: "email required" }, { status: 400 });
-        await checkinBehavioral(data.name, data.email, data.domain);
+        const { name, email, domain } = body;
+        if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
+        await checkinBehavioural(name, email, domain);
         return NextResponse.json({ success: true });
       }
       case "checkin-resume": {
-        if (!data?.email) return NextResponse.json({ error: "email required" }, { status: 400 });
-        await checkinResume(data.name, data.email, data.domain);
+        const { name, email, domain, jobRole } = body;
+        if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
+        await checkinResume(name, email, domain, jobRole);
         return NextResponse.json({ success: true });
       }
-      case "checkin-ppt": {
-        if (!data?.email) return NextResponse.json({ error: "email required" }, { status: 400 });
-        await checkinPPT(data.name, data.email, data.domain);
+      case "checkin-frontdesk": {
+        const { name, email, domain, jobRole } = body;
+        if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
+        await checkInAtFrontDesk(name, email, domain, jobRole);
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Interviewer submits: IA score + comments ──
+      case "submit-ia": {
+        const { rowIndex, score, comments } = body;
+        if (rowIndex === undefined) return NextResponse.json({ error: "rowIndex required" }, { status: 400 });
+        await submitIAScore(rowIndex, score || "", comments || "");
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Interviewer submits: Behavioural score + feedback ──
+      case "submit-behavioural": {
+        const { rowIndex, score, feedback } = body;
+        if (rowIndex === undefined) return NextResponse.json({ error: "rowIndex required" }, { status: 400 });
+        await submitBehaviouralScore(rowIndex, score || "", feedback || "");
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Interviewer submits: Resume score ──
+      case "submit-resume": {
+        const { rowIndex, score } = body;
+        if (rowIndex === undefined) return NextResponse.json({ error: "rowIndex required" }, { status: 400 });
+        await updateResumeRow(rowIndex, "score", score || "");
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Interviewer submits: Panel interview scores (batch) ──
+      case "interviewer-submit": {
+        const { rowIndex, techScore, techFeedback, pptScore, pptFeedback } = body;
+        if (rowIndex === undefined) return NextResponse.json({ error: "rowIndex required" }, { status: 400 });
+        const updates = [];
+        if (techScore !== undefined) updates.push(updateInterviewRow(rowIndex, "techScore", techScore));
+        if (techFeedback !== undefined) updates.push(updateInterviewRow(rowIndex, "techFeedback", techFeedback));
+        if (pptScore !== undefined) updates.push(updateInterviewRow(rowIndex, "pptScore", pptScore));
+        if (pptFeedback !== undefined) updates.push(updateInterviewRow(rowIndex, "pptFeedback", pptFeedback));
+        await Promise.all(updates);
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Admin: station updates ──
+      case "update-ia": {
+        const { rowIndex, field, value } = body;
+        await updateIARow(rowIndex, field, value);
+        return NextResponse.json({ success: true });
+      }
+      case "update-behavioural": {
+        const { rowIndex, field, value } = body;
+        await updateBehaviouralRow(rowIndex, field, value);
+        return NextResponse.json({ success: true });
+      }
+      case "update-resume": {
+        const { rowIndex, field, value } = body;
+        await updateResumeRow(rowIndex, field, value);
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Admin: set IA threshold ──
+      case "set-ia-threshold": {
+        const { value } = body;
+        if (value === undefined) return NextResponse.json({ error: "value required" }, { status: 400 });
+        await setIAThreshold(value);
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Admin: batch qualify candidates ──
+      case "batch-qualify": {
+        const { updates } = body;
+        if (!updates || !Array.isArray(updates)) return NextResponse.json({ error: "updates array required" }, { status: 400 });
+        await batchQualifyIA(updates);
         return NextResponse.json({ success: true });
       }
 

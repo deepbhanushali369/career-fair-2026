@@ -1,49 +1,69 @@
 import { NextResponse } from "next/server";
 import {
-  getAllInterviews, getCandidateByEmail, getCandidateJourney,
-  getHelperCandidates, getSettings, getAllStationsAdmin,
-  getAllOA, getAllBehavioural, getAllResume, getAllPPT,
+  getAllInterviews, getCandidateByEmail,
+  getHelperCandidates, getSettings,
+  getCandidateJourney, getExhibitors,
+  getFrontDeskStatus, getAllFrontDesk,
+  getAllIA, getAllBehavioural, getAllResume,
+  getInterviewerCandidates,
+  getIAThreshold, getQualifiedCandidates,
 } from "@/lib/sheets";
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action");
-  const email = searchParams.get("email");
 
   try {
     switch (action) {
-      // ── Admin: ALL station data in one call ──
-      case "all-stations": {
-        const data = await getAllStationsAdmin();
-        return NextResponse.json(data);
-      }
-
-      // ── Candidate: full journey ──
       case "journey": {
+        const email = searchParams.get("email");
         if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
         const journey = await getCandidateJourney(email);
-        if (!journey.name && !journey.oa && !journey.interview && !journey.behavioral && !journey.resume && !journey.ppt) {
-          return NextResponse.json({ error: "Not found" }, { status: 404 });
-        }
+        if (!journey) return NextResponse.json({ error: "Not found" }, { status: 404 });
         return NextResponse.json(journey);
       }
 
-      // ── Legacy single lookups (kept for compatibility) ──
-      case "candidate": {
+      case "exhibitors": {
+        return NextResponse.json(await getExhibitors());
+      }
+
+      case "front-desk-status": {
+        const email = searchParams.get("email");
         if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
-        const candidate = await getCandidateByEmail(email);
-        if (!candidate) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        return NextResponse.json(candidate);
+        const status = await getFrontDeskStatus(email);
+        return NextResponse.json(status || { checkedIn: false });
       }
-      case "all-interviews": {
-        return NextResponse.json(await getAllInterviews());
+
+      case "all-front-desk": return NextResponse.json(await getAllFrontDesk());
+      case "all-interviews": return NextResponse.json(await getAllInterviews());
+      case "all-ia": return NextResponse.json(await getAllIA());
+      case "all-behavioural": return NextResponse.json(await getAllBehavioural());
+      case "all-resume": return NextResponse.json(await getAllResume());
+
+      case "ia-threshold": {
+        const threshold = await getIAThreshold();
+        return NextResponse.json({ threshold });
       }
-      case "helpers": {
-        return NextResponse.json(await getHelperCandidates());
+
+      case "admin-all": {
+        const [interviews, ia, behavioural, resume, frontDesk, helpers, settings] = await Promise.all([
+          getAllInterviews(), getAllIA(), getAllBehavioural(),
+          getAllResume(), getAllFrontDesk(),
+          getHelperCandidates(), getSettings(),
+        ]);
+        const threshold = await getIAThreshold();
+        return NextResponse.json({ interviews, ia, behavioural, resume, frontDesk, helpers, settings, threshold });
       }
-      case "settings": {
-        return NextResponse.json(await getSettings());
+
+      case "interviewer-candidates": {
+        const name = searchParams.get("name");
+        if (!name) return NextResponse.json({ error: "Interviewer name required" }, { status: 400 });
+        return NextResponse.json(await getInterviewerCandidates(name));
       }
+
+      case "helpers": return NextResponse.json(await getHelperCandidates());
+      case "settings": return NextResponse.json(await getSettings());
+      case "qualified-candidates": return NextResponse.json(await getQualifiedCandidates());
 
       default:
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
