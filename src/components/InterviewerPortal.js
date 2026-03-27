@@ -102,7 +102,7 @@ export default function InterviewerPortal({ onBack }) {
   // ── Login ──
   function handleLogin(e) {
     e.preventDefault();
-    if (username === "test" && password === "test") {
+    if (username === "interviewer" && password === "1234") {
       setLoggedIn(true);
       setLoginError("");
     } else {
