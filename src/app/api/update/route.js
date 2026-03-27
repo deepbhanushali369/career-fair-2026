@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import {
   updateInterviewRow, addInterviewRow, deleteInterviewRow,
-  checkinOA, checkinBehavioural, checkinResume, checkinPPT,
+  checkinIA, checkinBehavioural, checkinResume,
   checkInAtFrontDesk,
-  updateOARow, updateBehaviouralRow, updateResumeRow, updatePPTRow,
+  updateIARow, submitIAScore,
+  updateBehaviouralRow, submitBehaviouralScore,
+  updateResumeRow,
   getCandidateByEmail,
+  setIAThreshold, batchQualifyIA,
 } from "@/lib/sheets";
 
 export async function POST(request) {
@@ -13,24 +16,18 @@ export async function POST(request) {
     const { action } = body;
 
     switch (action) {
-      // ── Active_Interviews: update a field ──
+      // ── Active_Interviews ──
       case "update": {
         const { rowIndex, field, value } = body;
-        if (rowIndex === undefined || !field) {
-          return NextResponse.json({ error: "rowIndex and field required" }, { status: 400 });
-        }
+        if (rowIndex === undefined || !field) return NextResponse.json({ error: "rowIndex and field required" }, { status: 400 });
         await updateInterviewRow(rowIndex, field, value);
         return NextResponse.json({ success: true });
       }
-
-      // ── Active_Interviews: add new row ──
       case "add": {
         if (!body.data) return NextResponse.json({ error: "data required" }, { status: 400 });
         await addInterviewRow(body.data);
         return NextResponse.json({ success: true });
       }
-
-      // ── Active_Interviews: delete row ──
       case "delete": {
         const { rowIndex } = body;
         if (rowIndex === undefined) return NextResponse.json({ error: "rowIndex required" }, { status: 400 });
@@ -38,49 +35,33 @@ export async function POST(request) {
         return NextResponse.json({ success: true });
       }
 
-      // ── Check-in at Interview station (update existing row) ──
+      // ── Check-ins ──
       case "checkin-interview": {
         const { email } = body;
         if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
         const candidate = await getCandidateByEmail(email);
-        if (!candidate) return NextResponse.json({ error: "Candidate not found in Active_Interviews" }, { status: 404 });
+        if (!candidate) return NextResponse.json({ error: "Not found in Active_Interviews" }, { status: 404 });
         await updateInterviewRow(candidate.rowIndex, "checkin", "Yes");
         return NextResponse.json({ success: true });
       }
-
-      // ── Check-in at OA station ──
-      case "checkin-oa": {
+      case "checkin-ia": {
         const { name, email, domain } = body;
         if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
-        await checkinOA(name, email, domain);
+        await checkinIA(name, email, domain);
         return NextResponse.json({ success: true });
       }
-
-      // ── Check-in at Behavioural station ──
       case "checkin-behavioral": {
         const { name, email, domain } = body;
         if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
         await checkinBehavioural(name, email, domain);
         return NextResponse.json({ success: true });
       }
-
-      // ── Check-in at Resume station ──
       case "checkin-resume": {
-        const { name, email, domain } = body;
+        const { name, email, domain, jobRole } = body;
         if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
-        await checkinResume(name, email, domain);
+        await checkinResume(name, email, domain, jobRole);
         return NextResponse.json({ success: true });
       }
-
-      // ── Check-in at PPT station ──
-      case "checkin-ppt": {
-        const { name, email, domain } = body;
-        if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
-        await checkinPPT(name, email, domain);
-        return NextResponse.json({ success: true });
-      }
-
-      // ── Front Desk check-in (admin action) ──
       case "checkin-frontdesk": {
         const { name, email, domain, jobRole } = body;
         if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
@@ -88,11 +69,34 @@ export async function POST(request) {
         return NextResponse.json({ success: true });
       }
 
-      // ── Interviewer submit: batch update scores for a candidate ──
+      // ── Interviewer submits: IA score + comments ──
+      case "submit-ia": {
+        const { rowIndex, score, comments } = body;
+        if (rowIndex === undefined) return NextResponse.json({ error: "rowIndex required" }, { status: 400 });
+        await submitIAScore(rowIndex, score || "", comments || "");
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Interviewer submits: Behavioural score + feedback ──
+      case "submit-behavioural": {
+        const { rowIndex, score, feedback } = body;
+        if (rowIndex === undefined) return NextResponse.json({ error: "rowIndex required" }, { status: 400 });
+        await submitBehaviouralScore(rowIndex, score || "", feedback || "");
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Interviewer submits: Resume score ──
+      case "submit-resume": {
+        const { rowIndex, score } = body;
+        if (rowIndex === undefined) return NextResponse.json({ error: "rowIndex required" }, { status: 400 });
+        await updateResumeRow(rowIndex, "score", score || "");
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Interviewer submits: Panel interview scores (batch) ──
       case "interviewer-submit": {
         const { rowIndex, techScore, techFeedback, pptScore, pptFeedback } = body;
         if (rowIndex === undefined) return NextResponse.json({ error: "rowIndex required" }, { status: 400 });
-        // Batch: update all score fields at once
         const updates = [];
         if (techScore !== undefined) updates.push(updateInterviewRow(rowIndex, "techScore", techScore));
         if (techFeedback !== undefined) updates.push(updateInterviewRow(rowIndex, "techFeedback", techFeedback));
@@ -102,10 +106,10 @@ export async function POST(request) {
         return NextResponse.json({ success: true });
       }
 
-      // ── Station score updates (admin) ──
-      case "update-oa": {
+      // ── Admin: station updates ──
+      case "update-ia": {
         const { rowIndex, field, value } = body;
-        await updateOARow(rowIndex, field, value);
+        await updateIARow(rowIndex, field, value);
         return NextResponse.json({ success: true });
       }
       case "update-behavioural": {
@@ -118,9 +122,20 @@ export async function POST(request) {
         await updateResumeRow(rowIndex, field, value);
         return NextResponse.json({ success: true });
       }
-      case "update-ppt": {
-        const { rowIndex, field, value } = body;
-        await updatePPTRow(rowIndex, field, value);
+
+      // ── Admin: set IA threshold ──
+      case "set-ia-threshold": {
+        const { value } = body;
+        if (value === undefined) return NextResponse.json({ error: "value required" }, { status: 400 });
+        await setIAThreshold(value);
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Admin: batch qualify candidates ──
+      case "batch-qualify": {
+        const { updates } = body;
+        if (!updates || !Array.isArray(updates)) return NextResponse.json({ error: "updates array required" }, { status: 400 });
+        await batchQualifyIA(updates);
         return NextResponse.json({ success: true });
       }
 
@@ -129,9 +144,6 @@ export async function POST(request) {
     }
   } catch (error) {
     console.error("Update error:", error);
-    return NextResponse.json(
-      { error: "Failed to update", details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to update", details: error.message }, { status: 500 });
   }
 }

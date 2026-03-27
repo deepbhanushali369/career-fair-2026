@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import CandidatePortal from "@/components/CandidatePortal";
 import AdminDashboard from "@/components/AdminDashboard";
+import InterviewerPortal from "@/components/InterviewerPortal";
 
 // ── Countdown to March 28, 2026 ─────────────────────────────────────
 function useCountdown() {
   const [time, setTime] = useState({ days: 0, hours: 0, mins: 0, secs: 0 });
   useEffect(() => {
-    const target = new Date("2026-03-28T10:00:00").getTime();
+    const target = new Date("2026-03-28T09:30:00").getTime();
     const tick = () => {
       const now = Date.now();
       const diff = Math.max(0, target - now);
@@ -69,19 +70,7 @@ export default function Home() {
 
   if (mode === "candidate") return <CandidatePortal />;
   if (mode === "admin") return <AdminDashboard onBack={() => setMode(null)} />;
-  if (mode === "interviewer") {
-    // Placeholder — we'll build this next
-    return (
-      <div style={{ minHeight: "100vh", background: "#060B18", color: "#F8FAFC", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Outfit', sans-serif" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🎤</div>
-          <h2 style={{ fontSize: "20px", fontWeight: 700 }}>Interviewer Portal</h2>
-          <p style={{ color: "#64748B", margin: "8px 0 24px" }}>Coming soon</p>
-          <button onClick={() => setMode(null)} style={{ padding: "10px 24px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.1)", background: "transparent", color: "#94A3B8", cursor: "pointer" }}>← Back</button>
-        </div>
-      </div>
-    );
-  }
+  if (mode === "interviewer") return <InterviewerPortal onBack={() => setMode(null)} />;
 
   // ── Styles ──
   const glass = {
@@ -95,7 +84,7 @@ export default function Home() {
     { num: "70+", label: "Candidates" },
     { num: "20+", label: "Companies" },
     { num: "15+", label: "Interviewers" },
-    { num: "5", label: "Stages" },
+    { num: "4", label: "Desks" },
   ];
 
   const portals = [
@@ -113,7 +102,7 @@ export default function Home() {
     },
     {
       key: "admin-login", icon: "⚡", title: "I'm an Admin",
-      sub: "Manage all stations & data",
+      sub: "Manage all desks & data",
       gradient: "linear-gradient(135deg, rgba(139,92,246,0.15), rgba(168,85,247,0.08))",
       border: "rgba(139,92,246,0.25)", accent: "#A78BFA",
     },
