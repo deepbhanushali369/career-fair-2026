@@ -7,6 +7,7 @@ import {
   getAllIA, getAllBehavioural, getAllResume,
   getInterviewerCandidates,
   getIAThreshold, getQualifiedCandidates,
+  getAdminAllBatch,
 } from "@/lib/sheets";
 
 export async function GET(request) {
@@ -45,14 +46,9 @@ export async function GET(request) {
         return NextResponse.json({ threshold });
       }
 
+      // ONE batchGet call reads all 8 ranges (was 8 separate reads)
       case "admin-all": {
-        const [interviews, ia, behavioural, resume, frontDesk, helpers, settings] = await Promise.all([
-          getAllInterviews(), getAllIA(), getAllBehavioural(),
-          getAllResume(), getAllFrontDesk(),
-          getHelperCandidates(), getSettings(),
-        ]);
-        const threshold = await getIAThreshold();
-        return NextResponse.json({ interviews, ia, behavioural, resume, frontDesk, helpers, settings, threshold });
+        return NextResponse.json(await getAdminAllBatch());
       }
 
       case "interviewer-candidates": {

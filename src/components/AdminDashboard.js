@@ -84,11 +84,35 @@ export default function AdminDashboard({ onBack }) {
     finally { if (!silent) setLoading(false); }
   }, []);
 
+  // ── Lightweight fetch: only Front Desk (1 read instead of 8) ──
+  const fetchFrontDeskOnly = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sheets?action=all-front-desk");
+      if (res.ok) {
+        const frontDesk = await res.json();
+        setData((prev) => prev ? { ...prev, frontDesk } : prev);
+      }
+    } catch {}
+  }, []);
+
+  // Initial full load
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Smart polling: light fetch on front desk tab, full fetch on other tabs
   useEffect(() => {
-    fetchData();
-    pollRef.current = setInterval(() => fetchData(true), 60000);
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (activeTab === "frontdesk") {
+      pollRef.current = setInterval(fetchFrontDeskOnly, 60000);
+    } else {
+      pollRef.current = setInterval(() => fetchData(true), 60000);
+    }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [fetchData]);
+  }, [activeTab, fetchData, fetchFrontDeskOnly]);
+
+  // Refresh full data when switching away from front desk
+  useEffect(() => {
+    if (data && activeTab !== "frontdesk") fetchData(true);
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Helpers ──
   function flashSaved(key) {
@@ -123,11 +147,11 @@ export default function AdminDashboard({ onBack }) {
     );
   }
 
-  // ── Front Desk: check in ──
+  // ── Front Desk: check in with OPTIMISTIC UI (zero refetch) ──
   async function handleFrontDeskCheckin(candidate) {
     setSaving(candidate.email);
     try {
-      await fetch("/api/update", {
+      const res = await fetch("/api/update", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "checkin-frontdesk",
@@ -135,8 +159,21 @@ export default function AdminDashboard({ onBack }) {
           domain: candidate.domain, jobRole: candidate.jobRole,
         }),
       });
+      if (res.ok) {
+        // Optimistic: flip card to checked-in locally — no API refetch needed
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+        setData((prev) => {
+          if (!prev) return prev;
+          const updatedFrontDesk = prev.frontDesk.map((c) =>
+            c.email.toLowerCase().trim() === candidate.email.toLowerCase().trim()
+              ? { ...c, checkedIn: true, checkInTime: timeStr }
+              : c
+          );
+          return { ...prev, frontDesk: updatedFrontDesk };
+        });
+      }
       flashSaved(candidate.email);
-      await fetchData(true);
     } catch {}
     finally { setSaving(null); }
   }
