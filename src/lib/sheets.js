@@ -482,32 +482,57 @@ export async function getExhibitors() {
 // ══════════════════════════════════════════════════════════════════════
 
 export async function getCandidateJourney(email) {
-  const [interview, ia, behavioural, resume, frontDesk] = await Promise.all([
+  const [interview, ia, behavioural, resume, frontDesk, exhibitors] = await Promise.all([
     getCandidateByEmail(email),
     getIAByEmail(email),
     getBehaviouralByEmail(email),
     getResumeByEmail(email),
     getFrontDeskStatus(email),
+    getExhibitors(),
   ]);
 
   if (!interview && !frontDesk && !ia) return null;
 
-  // IA status
+  // IA status — 4 states: Pending, In Progress, Pending Review, Completed
+  const iaQualified = ia ? (ia.qualified || "Pending") : "Pending";
   let iaStatus = "Pending";
   if (ia) {
-    iaStatus = (ia.score && ia.score !== "") ? "Completed" : "In Progress";
+    const hasScore = ia.score && ia.score !== "";
+    if (!hasScore) {
+      iaStatus = "In Progress";
+    } else if (iaQualified === "Yes" || iaQualified === "No") {
+      iaStatus = "Completed";
+    } else {
+      iaStatus = "Pending Review";
+    }
   }
-  const iaQualified = ia ? (ia.qualified || "Pending") : "Pending";
 
-  // Panel Interview status — gated by IA qualification
+  // IA result for candidate — Pass/Fail/Pending Review (never shows score)
+  let iaResult = "Pending";
+  if (iaQualified === "Yes") iaResult = "Pass";
+  else if (iaQualified === "No") iaResult = "Fail";
+  else if (iaStatus === "Pending Review") iaResult = "Pending Review";
+
+  // Behavioural status — locked until IA qualified = Yes
+  let behaviouralStatus = "Locked";
+  let behaviouralLockReason = "Selection based on Initial Assessment performance";
+  if (iaQualified === "Yes") {
+    if (!behavioural) behaviouralStatus = "Pending";
+    else if (behavioural.score && behavioural.score !== "") behaviouralStatus = "Completed";
+    else behaviouralStatus = "In Progress";
+    behaviouralLockReason = "";
+  } else if (iaQualified === "No") {
+    behaviouralStatus = "Locked";
+    behaviouralLockReason = "Thank you for completing the IA. Continue building your profile at the other desks \u2014 your network and skills are what matter most today.";
+  }
+
+  // Panel Interview status — locked until admin qualifies
+  // NEVER shows "Pending Review" — stays locked until qualified
   let interviewStatus = "Locked";
   let interviewLockReason = "Selection based on Initial Assessment performance";
   if (iaQualified === "No") {
     interviewStatus = "Not Qualified";
     interviewLockReason = "Thank you for completing the IA. Continue building your profile at the other desks \u2014 your network and skills are what matter most today.";
-  } else if (iaQualified === "Pending" && iaStatus === "Completed") {
-    interviewStatus = "Pending Review";
-    interviewLockReason = "Pending Review";
   } else if (iaQualified === "Yes") {
     if (!interview) {
       interviewStatus = "Qualified";
@@ -520,6 +545,7 @@ export async function getCandidateJourney(email) {
       interviewLockReason = "";
     }
   }
+  // If iaQualified === "Pending" (including Pending Review), interviewStatus stays "Locked"
 
   function stationStatus(data, scoreField = "score") {
     if (!data) return "Pending";
@@ -529,21 +555,45 @@ export async function getCandidateJourney(email) {
 
   const statuses = {
     ia: iaStatus,
-    behavioral: stationStatus(behavioural),
+    behavioral: behaviouralStatus,
     resume: stationStatus(resume),
     interview: interviewStatus,
   };
 
-  // If not qualified, total is 3 (IA, Behavioural, Resume only)
+  // Progress: Fail = /2 (IA + Resume), Pass = /4 (all four)
   const isNotQualified = iaQualified === "No";
-  const totalStations = isNotQualified ? 3 : 4;
+  const totalStations = isNotQualified ? 2 : 4;
 
   const completedCount = [
     statuses.ia === "Completed",
-    statuses.behavioral === "Completed",
     statuses.resume === "Completed",
-    ...(!isNotQualified ? [statuses.interview === "Completed"] : []),
+    ...(!isNotQualified ? [statuses.behavioral === "Completed", statuses.interview === "Completed"] : []),
   ].filter(Boolean).length;
+
+  // Build panelist info from exhibitors sheet
+  let panelists = [];
+  if (interview && interview.interviewer) {
+    const names = interview.interviewer.split(",").map((n) => n.trim()).filter(Boolean);
+    panelists = names.map((fullName) => {
+      const nameLower = fullName.toLowerCase().trim();
+      let match = exhibitors.find((e) =>
+        `${e.firstName} ${e.lastName}`.toLowerCase().trim() === nameLower
+      );
+      if (!match) {
+        match = exhibitors.find((e) => {
+          const first = (e.firstName || "").toLowerCase().trim();
+          const last = (e.lastName || "").toLowerCase().trim();
+          return nameLower.includes(first) && nameLower.includes(last) && first && last;
+        });
+      }
+      return {
+        name: fullName,
+        company: match?.company || "",
+        position: match?.position || "",
+        headshot: match?.headshot || "",
+      };
+    });
+  }
 
   return {
     name: interview?.name || frontDesk?.name || ia?.name || "",
@@ -556,8 +606,11 @@ export async function getCandidateJourney(email) {
     totalStations,
     statuses,
     iaQualified,
+    iaResult,
     interviewLockReason,
-    ia: ia || null,
+    behaviouralLockReason,
+    panelists,
+    ia: ia ? { email: ia.email, checkin: ia.checkin, qualified: ia.qualified } : null,
     behavioral: behavioural || null,
     resume: resume || null,
     interview: interview || null,
