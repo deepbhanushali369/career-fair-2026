@@ -157,7 +157,9 @@ export default function AdminDashboard({ onBack }) {
 
   // ── IA: mark all remaining pending as Not Qualified ──
   async function handleMarkRestNotQualified() {
-    const pending = (domain === "All" ? ia : ia.filter((r) => r.domain === domain))
+    if (!data) return;
+    const { ia: iaList = [] } = data;
+    const pending = (domain === "All" ? iaList : iaList.filter((r) => r.domain === domain))
       .filter((r) => r.email && r.score && r.qualified === "Pending");
     if (pending.length === 0) return;
     setSaving("mark-rest");
@@ -352,18 +354,20 @@ export default function AdminDashboard({ onBack }) {
           return (
             <>
               <DomainBar />
-              <div style={{ fontSize: "12px", color: "#64748B", marginBottom: "14px" }}>
-                <span style={{ color: "#F59E0B" }}>{scored} scored</span> · <span style={{ color: "#22C55E" }}>{qualifiedCount} qualified</span> · <span style={{ color: "#F87171" }}>{notQualifiedCount} not qualified</span>
-                {pendingCount > 0 && <span> · <span style={{ color: "#F97316" }}>{pendingCount} pending</span></span>}
+              <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap", alignItems: "center" }}>
+                <div style={{ fontSize: "12px", color: "#64748B" }}>
+                  <span style={{ color: "#F59E0B" }}>{scored} scored</span> · <span style={{ color: "#22C55E" }}>{qualifiedCount} qualified</span> · <span style={{ color: "#F87171" }}>{notQualifiedCount} not qualified</span>
+                  {pendingCount > 0 && <span> · <span style={{ color: "#F97316" }}>{pendingCount} pending</span></span>}
+                </div>
+                {pendingCount > 0 && (
+                  <button onClick={handleMarkRestNotQualified} disabled={saving === "mark-rest"} style={{
+                    marginLeft: "auto", padding: "7px 16px", borderRadius: "8px",
+                    border: "1px solid rgba(239,68,68,0.2)", background: saving === "mark-rest" ? "rgba(255,255,255,0.1)" : savedItems["mark-rest"] ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.08)",
+                    color: savedItems["mark-rest"] ? "#4ADE80" : "#F87171",
+                    fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: "'Outfit', sans-serif", whiteSpace: "nowrap",
+                  }}>{saving === "mark-rest" ? "Updating..." : savedItems["mark-rest"] ? "✓ Done" : `Mark Rest Not Qualified (${pendingCount})`}</button>
+                )}
               </div>
-              {pendingCount > 0 && (
-                <button onClick={handleMarkRestNotQualified} disabled={saving === "mark-rest"} style={{
-                  marginLeft: "auto", padding: "7px 16px", borderRadius: "8px",
-                  border: "1px solid rgba(239,68,68,0.2)", background: saving === "mark-rest" ? "rgba(255,255,255,0.1)" : savedItems["mark-rest"] ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.08)",
-                  color: savedItems["mark-rest"] ? "#4ADE80" : "#F87171",
-                  fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: "'Outfit', sans-serif", whiteSpace: "nowrap",
-                }}>{saving === "mark-rest" ? "Updating..." : savedItems["mark-rest"] ? "✓ Done" : `Mark Rest Not Qualified (${pendingCount})`}</button>
-              )}
 
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 {filtered.map((row) => {
@@ -593,7 +597,7 @@ export default function AdminDashboard({ onBack }) {
                       <div>
                         <div style={{ fontSize: "14px", fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{row.name}</div>
                         <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>
-                          {row.domain} · {row.interviewer || "—"} · {row.timeSlot || "—"} · Room {row.room || "—"}
+                          {row.domain} · {row.interviewer || "—"} · {row.timeSlot || "—"} · {row.room || "—"}
                         </div>
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -631,19 +635,27 @@ export default function AdminDashboard({ onBack }) {
 // ASSIGN CARD (used in Assign tab)
 // ══════════════════════════════════════════════════════════════════════
 function AssignCard({ candidate, interviewerList, roomList, saving, savedItems, onAssign }) {
-  const [interviewer, setInterviewer] = useState("");
+  const [selected, setSelected] = useState([]);
   const [timeSlot, setTimeSlot] = useState("");
   const [room, setRoom] = useState("");
   const isSaving = saving === candidate.email;
   const isSaved = savedItems[candidate.email];
 
-  // Auto-fill room when interviewer is selected (matching Settings VLOOKUP logic)
+  function toggleInterviewer(name) {
+    setSelected((prev) => prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]);
+  }
+
+  // Auto-fill room from first selected interviewer
   useEffect(() => {
-    if (interviewer) {
-      const idx = interviewerList.indexOf(interviewer);
+    if (selected.length > 0) {
+      const idx = interviewerList.indexOf(selected[0]);
       if (idx >= 0 && roomList[idx]) setRoom(roomList[idx]);
+    } else {
+      setRoom("");
     }
-  }, [interviewer, interviewerList, roomList]);
+  }, [selected, interviewerList, roomList]);
+
+  const interviewerStr = selected.join(", ");
 
   return (
     <div style={{ ...glass, padding: "16px", marginBottom: "10px" }}>
@@ -651,33 +663,48 @@ function AssignCard({ candidate, interviewerList, roomList, saving, savedItems, 
         <div style={{ fontSize: "14px", fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{candidate.name}</div>
         <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>{candidate.domain} · {candidate.jobRole} · IA: {candidate.score}/10</div>
       </div>
-      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end" }}>
-        <div style={{ flex: 1, minWidth: "140px" }}>
-          <label style={{ fontSize: "10px", color: "#64748B", display: "block", marginBottom: "6px" }}>Interviewer</label>
-          <select className="admin-select" value={interviewer} onChange={(e) => setInterviewer(e.target.value)} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", cursor: "pointer" }}>
-            <option value="">Select interviewer...</option>
-            {interviewerList.map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
+
+      {/* Interviewer chips */}
+      <div style={{ marginBottom: "12px" }}>
+        <label style={{ fontSize: "10px", color: "#64748B", display: "block", marginBottom: "8px" }}>Select Panelists {selected.length > 0 && `(${selected.length})`}</label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+          {interviewerList.map((name) => {
+            const isActive = selected.includes(name);
+            return (
+              <button key={name} onClick={() => toggleInterviewer(name)} style={{
+                padding: "6px 12px", borderRadius: "8px", cursor: "pointer",
+                fontSize: "12px", fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
+                border: isActive ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(255,255,255,0.08)",
+                background: isActive ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.04)",
+                color: isActive ? "#4ADE80" : "#94A3B8",
+                transition: "all 0.15s ease",
+              }}>{isActive ? "✓ " : ""}{name}</button>
+            );
+          })}
         </div>
-        <div style={{ flex: "0 0 130px" }}>
+      </div>
+
+      {/* Time slot + Room + Assign */}
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ flex: 1, minWidth: "130px" }}>
           <label style={{ fontSize: "10px", color: "#64748B", display: "block", marginBottom: "6px" }}>Time Slot</label>
           <select className="admin-select" value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", cursor: "pointer" }}>
             <option value="">Select time...</option>
             {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
-        <div style={{ flex: "0 0 80px" }}>
-          <label style={{ fontSize: "10px", color: "#64748B", display: "block", marginBottom: "6px" }}>Room</label>
-          <input type="text" value={room} readOnly style={{ ...inputStyle, width: "100%", boxSizing: "border-box", color: "#94A3B8" }} />
+        <div style={{ flex: "0 0 100px" }}>
+          <label style={{ fontSize: "10px", color: "#64748B", display: "block", marginBottom: "6px" }}>Room Name</label>
+          <input type="text" value={room} onChange={(e) => setRoom(e.target.value)} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} placeholder="Auto" />
         </div>
         <button
-          onClick={() => { if (interviewer && timeSlot) onAssign(candidate, interviewer, timeSlot, room); }}
-          disabled={!interviewer || !timeSlot || isSaving}
+          onClick={() => { if (selected.length > 0 && timeSlot) onAssign(candidate, interviewerStr, timeSlot, room); }}
+          disabled={selected.length === 0 || !timeSlot || isSaving}
           style={{
             padding: "10px 16px", borderRadius: "8px", border: "none",
-            background: (!interviewer || !timeSlot) ? "rgba(255,255,255,0.05)" : isSaving ? "rgba(255,255,255,0.1)" : isSaved ? "rgba(34,197,94,0.2)" : "linear-gradient(135deg, #8B5CF6, #6366F1)",
-            color: (!interviewer || !timeSlot) ? "#475569" : "#FFF",
-            fontSize: "12px", fontWeight: 700, cursor: (!interviewer || !timeSlot || isSaving) ? "default" : "pointer",
+            background: (selected.length === 0 || !timeSlot) ? "rgba(255,255,255,0.05)" : isSaving ? "rgba(255,255,255,0.1)" : isSaved ? "rgba(34,197,94,0.2)" : "linear-gradient(135deg, #8B5CF6, #6366F1)",
+            color: (selected.length === 0 || !timeSlot) ? "#475569" : "#FFF",
+            fontSize: "12px", fontWeight: 700, cursor: (selected.length === 0 || !timeSlot || isSaving) ? "default" : "pointer",
             fontFamily: "'Outfit', sans-serif", whiteSpace: "nowrap", flexShrink: 0,
           }}
         >

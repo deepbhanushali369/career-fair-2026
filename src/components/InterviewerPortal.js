@@ -102,7 +102,7 @@ export default function InterviewerPortal({ onBack }) {
   // ── Login ──
   function handleLogin(e) {
     e.preventDefault();
-    if (username === "interviewer" && password === "1234") {
+    if (username === "admin" && password === "1234") {
       setLoggedIn(true);
       setLoginError("");
     } else {
@@ -490,8 +490,15 @@ export default function InterviewerPortal({ onBack }) {
                         <div style={{ fontSize: "12px" }}><span style={{ color: "#475569" }}>Slot </span><span style={{ color: "#F8FAFC", fontWeight: 600 }}>{row.timeSlot || "—"}</span></div>
                       </div>
 
-                      {/* Check-in + Timer — interviewer starts the interview */}
-                      {!isCheckedIn ? (
+                      {/* Candidate check-in badge + Start Interview (separate actions) */}
+                      {isCheckedIn && !hasTimer && !isScored && (
+                        <div style={{ padding: "8px 12px", borderRadius: "8px", background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.1)", fontSize: "12px", color: "#4ADE80", marginBottom: "10px", textAlign: "center" }}>
+                          Candidate has arrived
+                        </div>
+                      )}
+
+                      {/* Start Interview button — only interviewer controls this */}
+                      {!hasTimer && !isScored ? (
                         <button onClick={() => handlePanelCheckin(row)} disabled={isSaving} style={{
                           width: "100%", padding: "12px", borderRadius: "10px", border: "none",
                           background: isSaving ? "rgba(255,255,255,0.1)" : "linear-gradient(135deg, #6366F1, #8B5CF6)",
@@ -499,15 +506,15 @@ export default function InterviewerPortal({ onBack }) {
                           cursor: isSaving ? "wait" : "pointer", marginBottom: "14px",
                         }}>{isSaving ? "Starting..." : "Start Interview →"}</button>
                       ) : (
-                        hasTimer && (
+                        hasTimer && !isScored && (
                           <div style={{ marginBottom: "14px", padding: "14px", borderRadius: "12px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.06)" }}>
                             <InterviewTimer startTime={hasTimer} />
                           </div>
                         )
                       )}
 
-                      {/* Score fields (show after check-in) */}
-                      {isCheckedIn && (
+                      {/* Score fields (show only after interviewer starts interview) */}
+                      {(hasTimer || isScored) && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                           <div style={{ display: "flex", gap: "8px" }}>
                             <div style={{ flex: 1 }}>

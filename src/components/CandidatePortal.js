@@ -49,6 +49,7 @@ function getHeadshotUrl(url) {
 function getStatusColor(status) {
   if (status === "Completed") return "#22C55E";
   if (status === "In Progress") return "#3B82F6";
+  if (status === "Pending Review") return "#F59E0B";
   return "#64748B";
 }
 
@@ -229,11 +230,11 @@ export default function CandidatePortal() {
     return (
       <Wrapper>
         <div style={{ maxWidth: "420px", margin: "0 auto", padding: "24px 20px", position: "relative", zIndex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", justifyContent: "center" }}>
-          <div style={{ position: "absolute", top: "24px", left: "20px", opacity: loaded ? 1 : 0, transform: loaded ? "translateX(0)" : "translateX(-10px)", transition: "all 0.5s ease" }}>
+          <div style={{ position: "absolute", top: "24px", left: "20px", zIndex: 10, opacity: loaded ? 1 : 0, transform: loaded ? "translateX(0)" : "translateX(-10px)", transition: "all 0.5s ease" }}>
             <button onClick={() => window.location.reload()} style={{
               background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-              color: "#64748B", padding: "8px 14px", borderRadius: "10px", cursor: "pointer",
-              fontSize: "13px", display: "flex", alignItems: "center", gap: "6px",
+              color: "#64748B", padding: "10px 16px", borderRadius: "10px", cursor: "pointer",
+              fontSize: "13px", display: "flex", alignItems: "center", gap: "6px", minHeight: "40px",
               backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", transition: "all 0.2s ease",
             }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)"; e.currentTarget.style.color = "#94A3B8"; }}
@@ -298,6 +299,9 @@ export default function CandidatePortal() {
     const score = data ? getScore(data) : null;
     const feedback = data ? getFeedback(data) : null;
     const isInterview = st.key === "interview";
+    const isIA = st.key === "ia";
+    const iaResult = journey.iaResult || "Pending";
+    const panelists = journey.panelists || [];
 
     return (
       <Wrapper>
@@ -306,7 +310,9 @@ export default function CandidatePortal() {
             <button onClick={() => setActiveStation(null)} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#94A3B8", padding: "10px 14px", borderRadius: "10px", cursor: "pointer", fontSize: "13px", fontFamily: "'DM Sans', sans-serif" }}>←</button>
             <div>
               <div style={{ fontSize: "18px", fontWeight: 700, fontFamily: "'Outfit', sans-serif" }}>{st.icon} {st.label}</div>
-              <div style={{ fontSize: "12px", fontWeight: 600, marginTop: "4px", color: getStatusColor(status) }}>{status}</div>
+              <div style={{ fontSize: "12px", fontWeight: 600, marginTop: "4px", color: getStatusColor(status) }}>
+                {isIA && status === "Completed" ? iaResult : status}
+              </div>
             </div>
           </div>
 
@@ -352,8 +358,29 @@ export default function CandidatePortal() {
               </div>
             )}
 
-            {/* Completed */}
-            {status === "Completed" && score && (
+            {/* Pending Review — scored but admin hasn't decided yet */}
+            {status === "Pending Review" && (
+              <div style={{ ...glass, padding: "28px", textAlign: "center", borderColor: "rgba(245,158,11,0.15)", background: "rgba(245,158,11,0.04)" }}>
+                <div style={{ fontSize: "40px", marginBottom: "16px" }}>⏳</div>
+                <div style={{ fontSize: "20px", fontWeight: 800, fontFamily: "'Outfit', sans-serif", color: "#F59E0B", marginBottom: "6px" }}>Pending Review</div>
+                <p style={{ fontSize: "13px", color: "#94A3B8", margin: 0, lineHeight: 1.5 }}>Your assessment has been evaluated. Results will be announced shortly.</p>
+              </div>
+            )}
+
+            {/* IA Completed — show Pass/Fail instead of score */}
+            {isIA && status === "Completed" && (
+              <div style={{ ...glass, padding: "28px", textAlign: "center", borderColor: iaResult === "Pass" ? "rgba(34,197,94,0.15)" : iaResult === "Fail" ? "rgba(239,68,68,0.15)" : "rgba(245,158,11,0.15)", background: iaResult === "Pass" ? "rgba(34,197,94,0.04)" : iaResult === "Fail" ? "rgba(239,68,68,0.04)" : "rgba(245,158,11,0.04)" }}>
+                <div style={{ fontSize: "48px", fontWeight: 900, fontFamily: "'Outfit', sans-serif", color: iaResult === "Pass" ? "#22C55E" : iaResult === "Fail" ? "#F87171" : "#F59E0B", marginBottom: "6px" }}>
+                  {iaResult === "Pass" ? "Pass ✓" : iaResult === "Fail" ? "Fail" : "Pending Review"}
+                </div>
+                <div style={{ fontSize: "14px", fontWeight: 500, color: "#94A3B8", marginTop: "6px" }}>
+                  {iaResult === "Pass" ? "Great job! Your next desks are now unlocked." : iaResult === "Fail" ? "Continue building your profile at the other desks." : "Your result is being reviewed."}
+                </div>
+              </div>
+            )}
+
+            {/* Behavioural/Resume Completed — show score */}
+            {!isIA && !isInterview && status === "Completed" && score && (
               <div style={{ ...glass, padding: "28px", textAlign: "center", borderColor: "rgba(34,197,94,0.15)", background: "rgba(34,197,94,0.04)" }}>
                 <div style={{ fontSize: "48px", fontWeight: 900, fontFamily: "'Outfit', sans-serif", color: getScoreColor(score) || "#F8FAFC", marginBottom: "6px" }}>
                   {score}<span style={{ fontSize: "20px", color: "#475569" }}>/10</span>
@@ -362,32 +389,85 @@ export default function CandidatePortal() {
               </div>
             )}
 
-            {/* Interview-specific: show PPT score too if completed */}
-            {isInterview && status === "Completed" && data?.pptScore && (
-              <div style={{ ...glass, padding: "20px", textAlign: "center" }}>
-                <div style={{ fontSize: "12px", color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>PPT Presentation Score</div>
-                <div style={{ fontSize: "32px", fontWeight: 800, fontFamily: "'Outfit', sans-serif", color: getScoreColor(parseInt(data.pptScore)) || "#F8FAFC" }}>
-                  {data.pptScore}<span style={{ fontSize: "16px", color: "#475569" }}>/10</span>
+            {/* Interview-specific: show Tech + PPT scores and feedback */}
+            {isInterview && status === "Completed" && data?.techScore && (
+              <div style={{ ...glass, padding: "20px" }}>
+                <div style={{ display: "flex", gap: "16px", justifyContent: "center", marginBottom: data.techFeedback || data.pptFeedback ? "16px" : "0" }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: "12px", color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Tech Score</div>
+                    <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Outfit', sans-serif", color: getScoreColor(parseInt(data.techScore)) }}>
+                      {data.techScore}<span style={{ fontSize: "16px", color: "#475569" }}>/10</span>
+                    </div>
+                  </div>
+                  {data.pptScore && (
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: "12px", color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>PPT Score</div>
+                      <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Outfit', sans-serif", color: getScoreColor(parseInt(data.pptScore)) }}>
+                        {data.pptScore}<span style={{ fontSize: "16px", color: "#475569" }}>/10</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {data.pptFeedback && <div style={{ fontSize: "13px", color: "#94A3B8", marginTop: "8px" }}>{data.pptFeedback}</div>}
+                {(data.techFeedback || data.pptFeedback) && (
+                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "14px" }}>
+                    {data.techFeedback && (
+                      <div style={{ fontSize: "13px", color: "#CBD5E1", marginBottom: data.pptFeedback ? "8px" : "0", lineHeight: 1.5 }}>
+                        <span style={{ color: "#64748B", fontWeight: 600 }}>Tech: </span>{data.techFeedback}
+                      </div>
+                    )}
+                    {data.pptFeedback && (
+                      <div style={{ fontSize: "13px", color: "#CBD5E1", lineHeight: 1.5 }}>
+                        <span style={{ color: "#64748B", fontWeight: 600 }}>PPT: </span>{data.pptFeedback}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Interview details */}
+            {/* Interview details — panelists with company/position/photo */}
             {isInterview && data && (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <InfoCard icon="👤" label="Interviewer" value={data.interviewer || "—"} />
+                {/* Panelist cards with headshots */}
+                {panelists.length > 0 && (
+                  <div style={{ ...glass, padding: "18px" }}>
+                    <div style={{ fontSize: "12px", color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>Your Panel</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                      {panelists.map((p, idx) => {
+                        const photoUrl = getHeadshotUrl(p.headshot);
+                        return (
+                          <div key={idx} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                            {photoUrl ? (
+                              <img src={photoUrl} alt={p.name} referrerPolicy="no-referrer" style={{ width: "44px", height: "44px", borderRadius: "12px", objectFit: "cover", flexShrink: 0, border: "1px solid rgba(255,255,255,0.08)" }} />
+                            ) : (
+                              <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "rgba(99,102,241,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0 }}>👤</div>
+                            )}
+                            <div>
+                              <div style={{ fontSize: "14px", fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{p.name}</div>
+                              {(p.company || p.position) && (
+                                <div style={{ fontSize: "12px", color: "#64748B", marginTop: "2px" }}>{p.position ? `${p.position}` : ""}{p.position && p.company ? " — " : ""}{p.company}</div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {!panelists.length && data.interviewer && (
+                  <InfoCard icon="👤" label="Interviewer" value={data.interviewer} />
+                )}
                 <InfoCard icon="🕐" label="Time Slot" value={data.timeSlot || "—"} />
-                <InfoCard icon="📍" label="Room" value={data.room || "—"} />
+                <InfoCard icon="📍" label="Room Name" value={data.room || "—"} />
               </div>
             )}
 
             {activeStation === "behavioral" && data && data.room && (
-              <InfoCard icon="📍" label="Room" value={data.room} />
+              <InfoCard icon="📍" label="Room Name" value={data.room} />
             )}
 
             {/* Feedback */}
-            {feedback && (
+            {feedback && !isIA && !isInterview && (
               <div style={{ ...glass, padding: "20px" }}>
                 <div style={{ fontSize: "12px", color: "#64748B", marginBottom: "8px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Feedback</div>
                 <div style={{ fontSize: "14px", lineHeight: 1.7, color: "#CBD5E1" }}>{feedback}</div>
@@ -418,11 +498,17 @@ export default function CandidatePortal() {
   const firstName = journey.name?.split(" ")[0] || "Candidate";
   const isFrontDeskCheckedIn = journey.frontDeskCheckedIn;
   const iaQualified = journey.iaQualified;
+  const iaResult = journey.iaResult || "Pending"; // Pass / Fail / Pending / Pending Review
   const interviewLockReason = journey.interviewLockReason;
+  const behaviouralLockReason = journey.behaviouralLockReason || "Selection based on Initial Assessment performance";
   const interviewStatus = journey.statuses?.interview;
+  const behaviouralStatus = journey.statuses?.behavioral;
+  const panelists = journey.panelists || [];
 
-  // Is interview card fully unlocked? (assigned or in progress or completed)
+  // Is interview card fully unlocked?
   const interviewUnlocked = ["Assigned", "In Progress", "Completed"].includes(interviewStatus);
+  // Is behavioural card unlocked?
+  const behaviouralUnlocked = !["Locked"].includes(behaviouralStatus);
 
   return (
     <Wrapper>
@@ -510,21 +596,27 @@ export default function CandidatePortal() {
                 const isCompleted = status === "Completed";
                 const isInProgress = status === "In Progress";
                 const isInterview = st.key === "interview";
+                const isBehavioural = st.key === "behavioral";
+                const isIA = st.key === "ia";
                 const isFrontLocked = !isFrontDeskCheckedIn;
 
-                // Interview card has special gating
+                // Lock logic for interview AND behavioural
                 const isInterviewLocked = isInterview && !interviewUnlocked;
-                const isLocked = isFrontLocked || isInterviewLocked;
+                const isBehaviouralLocked = isBehavioural && !behaviouralUnlocked;
+                const isLocked = isFrontLocked || isInterviewLocked || isBehaviouralLocked;
 
-                // Determine subtitle for interview card
+                // Determine subtitle
                 let subtitle = status;
-                if (isInterview && isInterviewLocked) {
+                if (isIA && isCompleted) {
+                  // Show Pass/Fail instead of score
+                  subtitle = iaResult === "Pass" ? "Pass ✓" : iaResult === "Fail" ? "Fail" : "Completed";
+                } else if (isInterview && isInterviewLocked) {
                   if (interviewStatus === "Not Qualified") subtitle = "Not Qualified";
-                  else if (interviewStatus === "Pending Review") subtitle = "Pending Review";
                   else if (interviewStatus === "Qualified") subtitle = "Qualified ✓";
-                  else if (isFrontLocked) subtitle = "Locked";
-                  else subtitle = "";
-                } else if (isCompleted && score) {
+                  else subtitle = "Locked";
+                } else if (isBehavioural && isBehaviouralLocked) {
+                  subtitle = "Locked";
+                } else if (isCompleted && score && !isIA) {
                   subtitle = `${status} • ${score}/10`;
                 }
 
@@ -535,17 +627,37 @@ export default function CandidatePortal() {
                 else if (isCompleted) { borderColor = "rgba(34,197,94,0.15)"; bgColor = "rgba(34,197,94,0.04)"; }
                 else if (isInProgress || status === "Assigned") { borderColor = "rgba(59,130,246,0.15)"; bgColor = "rgba(59,130,246,0.04)"; }
 
-                // Special: qualified but not assigned — green tint
+                // Special states
                 if (isInterview && interviewStatus === "Qualified") {
                   borderColor = "rgba(34,197,94,0.2)"; bgColor = "rgba(34,197,94,0.06)";
+                }
+                if (isIA && isCompleted && iaResult === "Pass") {
+                  borderColor = "rgba(34,197,94,0.2)"; bgColor = "rgba(34,197,94,0.05)";
+                }
+                if (isIA && isCompleted && iaResult === "Fail") {
+                  borderColor = "rgba(239,68,68,0.15)"; bgColor = "rgba(239,68,68,0.04)";
+                }
+                if (isIA && status === "Pending Review") {
+                  borderColor = "rgba(245,158,11,0.15)"; bgColor = "rgba(245,158,11,0.04)";
                 }
 
                 // Subtitle color
                 let subtitleColor = "#475569";
                 if (!isLocked) subtitleColor = getStatusColor(status);
+                if (isIA && iaResult === "Pass") subtitleColor = "#22C55E";
+                if (isIA && iaResult === "Fail") subtitleColor = "#F87171";
+                if (isIA && iaResult === "Pending Review") subtitleColor = "#F59E0B";
                 if (isInterview && interviewStatus === "Qualified") subtitleColor = "#22C55E";
                 if (isInterview && interviewStatus === "Not Qualified") subtitleColor = "#64748B";
-                if (isInterview && interviewStatus === "Pending Review") subtitleColor = "#F59E0B";
+
+                // Lock reason for both behavioural and interview
+                const showLockMessage = (isInterview || isBehavioural) && isLocked && !isFrontLocked;
+                const lockMessage = isInterview ? interviewLockReason : behaviouralLockReason;
+                const showLockText = showLockMessage && lockMessage && lockMessage !== "Pending Review";
+
+                // Opacity — gray out locked cards equally
+                const isSpecialVisible = (isInterview && (interviewStatus === "Qualified" || interviewStatus === "Not Qualified"));
+                const lockOpacity = isLocked ? (isSpecialVisible ? 0.7 : 0.4) : 1;
 
                 return (
                   <button key={st.key}
@@ -559,17 +671,17 @@ export default function CandidatePortal() {
                       color: "#F8FAFC", textAlign: "left",
                       display: "flex", alignItems: "center", gap: "14px",
                       transition: "all 0.2s ease", fontFamily: "'DM Sans', sans-serif",
-                      opacity: isLocked ? (isInterview && interviewStatus !== "Locked" ? 0.7 : 0.4) : 1,
+                      opacity: lockOpacity,
                     }}
                     onMouseEnter={(e) => { if (!isLocked) { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = `${st.accent}40`; } }}
                     onMouseLeave={(e) => { if (!isLocked) { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = borderColor; } }}
                   >
                     <div style={{
                       width: "44px", height: "44px", borderRadius: "12px",
-                      background: isLocked && !(isInterview && interviewStatus !== "Locked") ? "rgba(255,255,255,0.03)" : st.accentBg,
+                      background: isLocked && !isSpecialVisible ? "rgba(255,255,255,0.03)" : st.accentBg,
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: "20px", flexShrink: 0,
-                      filter: (isFrontLocked) ? "grayscale(1)" : "none",
+                      filter: (isFrontLocked || isBehaviouralLocked || (isInterviewLocked && !isSpecialVisible)) ? "grayscale(1)" : "none",
                     }}>{st.icon}</div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -577,10 +689,10 @@ export default function CandidatePortal() {
                       <div style={{ fontSize: "12px", marginTop: "3px", fontWeight: 500, color: subtitleColor }}>
                         {isFrontLocked ? "Locked" : subtitle}
                       </div>
-                      {/* Interview lock reason message */}
-                      {isInterview && isInterviewLocked && !isFrontLocked && interviewLockReason && interviewLockReason !== "Pending Review" && interviewStatus !== "Qualified" && (
+                      {/* Lock reason message for both behavioural and interview */}
+                      {showLockText && interviewStatus !== "Qualified" && (
                         <div style={{ fontSize: "11px", color: "#475569", marginTop: "4px", lineHeight: 1.4 }}>
-                          {interviewLockReason}
+                          {lockMessage}
                         </div>
                       )}
                       {isInterview && interviewStatus === "Qualified" && (
@@ -591,7 +703,7 @@ export default function CandidatePortal() {
                     </div>
 
                     <div style={{ color: isLocked ? "#1E293B" : "#334155", fontSize: "18px", flexShrink: 0 }}>
-                      {isFrontLocked ? "🔒" : isInterviewLocked ? (interviewStatus === "Qualified" ? "✓" : interviewStatus === "Not Qualified" ? "" : "🔒") : "›"}
+                      {isFrontLocked ? "🔒" : (isInterviewLocked || isBehaviouralLocked) ? (interviewStatus === "Qualified" ? "✓" : interviewStatus === "Not Qualified" || behaviouralStatus === "Locked" ? "🔒" : "🔒") : "›"}
                     </div>
                   </button>
                 );
