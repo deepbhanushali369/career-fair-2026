@@ -56,6 +56,31 @@ export async function appendSheet(sheetId, range, values) {
   return res.data;
 }
 
+// ── batchGet: read multiple ranges in ONE API call ──────────────────
+export async function batchReadSheet(sheetId, ranges) {
+  const sheets = getSheets();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId: sheetId, ranges, valueRenderOption: "FORMATTED_VALUE",
+      });
+      return (res.data.valueRanges || []).map((vr) => vr.values || []);
+    } catch (err) {
+      if (err.code === 429 && attempt < 2) {
+        await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+        continue;
+      }
+      throw err;
+    }
+  }
+  return ranges.map(() => []);
+}
+
+// ── Exhibitor cache (never changes during event) ────────────────────
+let _exhibitorsCache = null;
+let _exhibitorsCacheTime = 0;
+const EXHIBITOR_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
 // ══════════════════════════════════════════════════════════════════════
 // ACTIVE_INTERVIEWS (Panel Interview)
 // A:Name | B:Email | C:Area of Interest | D:Job Role
@@ -191,23 +216,19 @@ export async function getAllFrontDesk() {
 }
 
 export async function checkInAtFrontDesk(name, email, domain, jobRole) {
-  // Front_Desk is pre-populated — A:D are formulas from Helper_Candidates
-  // Only write to E (Checked In) and F (Check In Time) — NEVER append rows
-  const existing = await getFrontDeskStatus(email);
-  if (existing && existing.checkedIn) return true; // already checked in
-
-  const now = new Date();
-  const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
-  // Find the row by email and update E:F
+  // Single read: find row AND check status in one pass (was 2 separate reads)
   const rows = await readSheet(SHEET_IDS.master, "Front_Desk!A:F");
+  const emailLower = email.toLowerCase().trim();
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][1] && rows[i][1].toLowerCase().trim() === email.toLowerCase().trim()) {
+    if (rows[i][1] && rows[i][1].toLowerCase().trim() === emailLower) {
+      if ((rows[i][4] || "").toLowerCase() === "yes") return true; // already checked in
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
       await writeSheet(SHEET_IDS.master, `Front_Desk!E${i + 1}:F${i + 1}`, [["Yes", timeStr]]);
       return true;
     }
   }
-  return false; // candidate not found in Front_Desk
+  return false;
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -461,20 +482,84 @@ export async function getSettings() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// ADMIN ALL BATCH — reads all admin tabs in ONE API call (was 8 reads)
+// ══════════════════════════════════════════════════════════════════════
+export async function getAdminAllBatch() {
+  const allSheets = await batchReadSheet(SHEET_IDS.master, [
+    "Active_Interviews!A:L",
+    "Initial_Assessment!A:G",
+    "Behavioural_Interview!A:G",
+    "Resume_Review!A:F",
+    "Front_Desk!A:F",
+    "Helper_Candidates!A:D",
+    "Settings!A:B",
+    "Initial_Assessment!I1",
+  ]);
+
+  const [aiRows, iaRows, behRows, resRows, fdRows, helpRows, setRows, threshRows] = allSheets;
+
+  const interviews = (aiRows.length > 1 ? aiRows.slice(1) : []).filter((r) => r[0]).map((r, i) => ({
+    rowIndex: i, name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+    jobRole: r[3] || "", interviewer: r[4] || "", room: r[5] || "",
+    timeSlot: r[6] || "", techScore: r[7] || "", techFeedback: r[8] || "",
+    pptScore: r[9] || "", pptFeedback: r[10] || "", checkin: r[11] || "No",
+  }));
+
+  const ia = (iaRows.length > 1 ? iaRows.slice(1) : []).filter((r) => r[0]).map((r, i) => ({
+    rowIndex: i, name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+    score: r[3] || "", comments: r[4] || "", qualified: r[5] || "Pending", checkin: r[6] || "No",
+  }));
+
+  const behavioural = (behRows.length > 1 ? behRows.slice(1) : []).filter((r) => r[0]).map((r, i) => ({
+    rowIndex: i, name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+    room: r[3] || "", score: r[4] || "", feedback: r[5] || "", checkin: r[6] || "No",
+  }));
+
+  const resume = (resRows.length > 1 ? resRows.slice(1) : []).filter((r) => r[0]).map((r, i) => ({
+    rowIndex: i, name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+    jobRole: r[3] || "", score: r[4] || "", checkin: r[5] || "No",
+  }));
+
+  const frontDesk = (fdRows.length > 1 ? fdRows.slice(1) : []).filter((r) => r[0]).map((r, i) => ({
+    rowIndex: i, name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+    jobRole: r[3] || "", checkedIn: (r[4] || "").toLowerCase() === "yes", checkInTime: r[5] || "",
+  }));
+
+  const helpers = (helpRows.length > 1 ? helpRows.slice(1) : []).filter((r) => r[0]).map((r) => ({
+    name: r[0] || "", email: r[1] || "", areaOfInterest: r[2] || "", jobRole: r[3] || "",
+  }));
+
+  const interviewers = [], rooms = [];
+  for (let i = 1; i < setRows.length; i++) {
+    if (setRows[i] && setRows[i][0]) interviewers.push(setRows[i][0]);
+    if (setRows[i] && setRows[i][1]) rooms.push(setRows[i][1]);
+  }
+
+  const threshold = (threshRows[0] && threshRows[0][0]) ? parseFloat(threshRows[0][0]) || 5 : 5;
+
+  return { interviews, ia, behavioural, resume, frontDesk, helpers, settings: { interviewers, rooms }, threshold };
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // EXHIBITORS (separate spreadsheet)
 // A:First Name | B:Last Name | C:Company Name | D:Position
 // E:Email Address | F:LinkedIn Profile | G:Headshot URL
 // ══════════════════════════════════════════════════════════════════════
 
 export async function getExhibitors() {
+  if (_exhibitorsCache && (Date.now() - _exhibitorsCacheTime) < EXHIBITOR_CACHE_TTL) {
+    return _exhibitorsCache;
+  }
   const rows = await readSheet(SHEET_IDS.exhibitors, "Sheet1!A:G");
   if (!rows || rows.length < 2) return [];
-  return rows.slice(1).filter((r) => r[0]).map((r) => ({
+  _exhibitorsCache = rows.slice(1).filter((r) => r[0]).map((r) => ({
     firstName: r[0] || "", lastName: r[1] || "",
     company: r[2] || "", position: r[3] || "",
     email: r[4] || "", linkedin: r[5] || "",
     headshot: r[6] || "",
   }));
+  _exhibitorsCacheTime = Date.now();
+  return _exhibitorsCache;
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -482,14 +567,76 @@ export async function getExhibitors() {
 // ══════════════════════════════════════════════════════════════════════
 
 export async function getCandidateJourney(email) {
-  const [interview, ia, behavioural, resume, frontDesk, exhibitors] = await Promise.all([
-    getCandidateByEmail(email),
-    getIAByEmail(email),
-    getBehaviouralByEmail(email),
-    getResumeByEmail(email),
-    getFrontDeskStatus(email),
-    getExhibitors(),
+  // ONE batchGet reads all 5 master tabs at once (was 5 separate reads)
+  const [allSheets, exhibitors] = await Promise.all([
+    batchReadSheet(SHEET_IDS.master, [
+      "Active_Interviews!A:L",
+      "Initial_Assessment!A:G",
+      "Behavioural_Interview!A:G",
+      "Resume_Review!A:F",
+      "Front_Desk!A:F",
+    ]),
+    getExhibitors(), // cached — 0 reads after first call
   ]);
+
+  const emailLower = email.toLowerCase().trim();
+  const [aiRows, iaRows, behRows, resRows, fdRows] = allSheets;
+
+  // Parse Active_Interviews
+  let interview = null;
+  for (let i = 1; i < aiRows.length; i++) {
+    const r = aiRows[i];
+    if (r[1] && r[1].toLowerCase().trim() === emailLower) {
+      interview = {
+        rowIndex: i - 1, sheetRow: i + 1,
+        name: r[0] || "", email: r[1] || "", domain: r[2] || "",
+        jobRole: r[3] || "", interviewer: r[4] || "", room: r[5] || "",
+        timeSlot: r[6] || "", techScore: r[7] || "", techFeedback: r[8] || "",
+        pptScore: r[9] || "", pptFeedback: r[10] || "", checkin: r[11] || "No",
+      };
+      break;
+    }
+  }
+
+  // Parse Initial_Assessment
+  let ia = null;
+  for (let i = 1; i < iaRows.length; i++) {
+    const r = iaRows[i];
+    if (r[1] && r[1].toLowerCase().trim() === emailLower) {
+      ia = { name: r[0] || "", email: r[1] || "", domain: r[2] || "", score: r[3] || "", comments: r[4] || "", qualified: r[5] || "Pending", checkin: r[6] || "No" };
+      break;
+    }
+  }
+
+  // Parse Behavioural_Interview
+  let behavioural = null;
+  for (let i = 1; i < behRows.length; i++) {
+    const r = behRows[i];
+    if (r[1] && r[1].toLowerCase().trim() === emailLower) {
+      behavioural = { name: r[0] || "", email: r[1] || "", domain: r[2] || "", room: r[3] || "", score: r[4] || "", feedback: r[5] || "", checkin: r[6] || "No" };
+      break;
+    }
+  }
+
+  // Parse Resume_Review
+  let resume = null;
+  for (let i = 1; i < resRows.length; i++) {
+    const r = resRows[i];
+    if (r[1] && r[1].toLowerCase().trim() === emailLower) {
+      resume = { name: r[0] || "", email: r[1] || "", domain: r[2] || "", jobRole: r[3] || "", score: r[4] || "", checkin: r[5] || "No" };
+      break;
+    }
+  }
+
+  // Parse Front_Desk
+  let frontDesk = null;
+  for (let i = 1; i < fdRows.length; i++) {
+    const r = fdRows[i];
+    if (r[1] && r[1].toLowerCase().trim() === emailLower) {
+      frontDesk = { name: r[0] || "", email: r[1] || "", domain: r[2] || "", jobRole: r[3] || "", checkedIn: (r[4] || "").toLowerCase() === "yes", checkInTime: r[5] || "" };
+      break;
+    }
+  }
 
   if (!interview && !frontDesk && !ia) return null;
 
